@@ -1,4 +1,4 @@
-//! `complai kb scaffold <framework>`:按内置结构表生成控制项桩文件。
+//! `complai compliance scaffold <framework>`:按内置结构表生成控制项桩文件。
 //!
 //! 桩文件含 frontmatter(ID + 控制点短名 + 域)与空的正文模板,
 //! 正文由人工摘录填充。已存在的文件不会被覆盖,以免破坏手工编辑。
@@ -98,7 +98,7 @@ fn scaffold_dengbao() -> eyre::Result<()> {
         }
     }
 
-    // 生成桩文件后立即构建索引,使 `kb list`/`kb show` 可用。
+    // 生成桩文件后立即构建索引,使 `compliance list`/`compliance show` 可用。
     crate::kb::build::build(&structure.framework)?;
 
     println!(

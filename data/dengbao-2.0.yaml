@@ -2,7 +2,7 @@
 #
 # 只含控制点 ID 与短名(事实性结构信息),不含标准要求正文。
 # 正文需手工摘录填充到各控制项文件,以规避标准文本版权。
-# 结构供 `complai kb scaffold dengbao-2.0` 生成控制桩使用。
+# 结构供 `complai compliance scaffold dengbao-2.0` 生成控制桩使用。
 
 framework: dengbao-2.0
 level: 3

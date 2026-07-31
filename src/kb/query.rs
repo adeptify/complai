@@ -1,4 +1,4 @@
-//! `complai kb show` / `kb list`:按需查询控制项,最小上下文。
+//! `complai compliance show` / `compliance list`:按需查询控制项,最小上下文。
 //!
 //! `list` 只读紧凑索引(ID + 标题 + 域),`show` 再按需加载单个控制正文。
 
@@ -15,7 +15,7 @@ use crate::model::{ControlId, Domain};
 pub fn load_index(framework: &str) -> eyre::Result<ControlIndex> {
     let path = framework_dir(framework)?.join("index.yaml");
     let content = fs::read_to_string(&path).wrap_err_with(|| {
-        format!("索引不存在({});先运行 `complai kb build {framework}`", path.display())
+        format!("索引不存在({});先运行 `complai compliance build {framework}`", path.display())
     })?;
     serde_yml::from_str(&content).wrap_err("解析索引失败")
 }
@@ -43,7 +43,7 @@ pub fn list(framework: Option<&str>, domain: Option<&str>) -> eyre::Result<()> {
     let root = kb_root()?;
     if !root.exists() {
         eyre::bail!(
-            "知识库根目录不存在:{}(先运行 `complai kb scaffold dengbao-2.0`)",
+            "知识库根目录不存在:{}(先运行 `complai compliance scaffold dengbao-2.0`)",
             root.display()
         );
     }

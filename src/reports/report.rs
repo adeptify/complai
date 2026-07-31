@@ -21,7 +21,7 @@ pub fn generate() -> eyre::Result<()> {
     let root = project_root()?;
     let matrix = crate::project::matrix::load(&root)?;
     let framework = matrix.framework.as_str().to_string();
-    let kb_index = load_index(&framework).wrap_err("加载知识库索引失败(先 complai kb build)")?;
+    let kb_index = load_index(&framework).wrap_err("加载知识库索引失败(先 complai compliance build)")?;
 
     // 控制标题/域/类别从 KB 索引取;矩阵只有 ID。
     let kb_by_id: HashMap<ControlId, &ControlIndexEntry> = kb_index

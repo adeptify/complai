@@ -33,7 +33,7 @@ impl fmt::Display for Framework {
 /// 全局唯一的控制项标识:`<framework>:<control_id>`,如 `dengbao-2.0:8.1.4.1`。
 ///
 /// 序列化为单个字符串(而非结构体),使 frontmatter 中 `id: dengbao-2.0:8.1.4.1`
-/// 既紧凑又可被 `FromStr` 反解,供 `kb show dengbao-2.0:8.1.4.1` 直接使用。
+/// 既紧凑又可被 `FromStr` 反解,供 `compliance show dengbao-2.0:8.1.4.1` 直接使用。
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ControlId {
     pub framework: Framework,

@@ -22,9 +22,9 @@ description: 初始化一个合规备案项目。确认框架与定级、系统(
 
 1. **核对 compliance KB 就绪**:
    ```
-   complai kb list --framework <框架>
+   complai compliance list --framework <框架>
    ```
-   若无控制项或报索引不存在,先 `complai kb scaffold <框架>`(必要时 `kb ingest <框架> notes.md` 补正文)。
+   若无控制项或报索引不存在,先 `complai compliance scaffold <框架>`(必要时 `compliance ingest <框架> notes.md` 补正文)。
 
 2. **系统(复用或新建)**:
    - 新系统:`complai system init <slug> --name "<显示名>"`

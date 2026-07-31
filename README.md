@@ -23,9 +23,9 @@ cargo clippy --all-targets # 无警告
 
 ```sh
 # 通用知识库(共享,一次性)
-complai kb scaffold dengbao-2.0              # -> compliance/dengbao-2.0/(70 控制桩)
-complai kb ingest dengbao-2.0 notes.md       # 批量摘录(@@ <id> 分块)填控制正文
-complai kb list --framework dengbao-2.0
+complai compliance scaffold dengbao-2.0              # -> compliance/dengbao-2.0/(70 控制桩)
+complai compliance ingest dengbao-2.0 notes.md       # 批量摘录(@@ <id> 分块)填控制正文
+complai compliance list --framework dengbao-2.0
 
 complai system init order-platform --name 订单平台   # -> system/order-platform/(共享)
 complai system add --system order-platform --domain 架构 \

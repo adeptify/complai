@@ -1,4 +1,4 @@
-//! `complai kb build <framework>`:遍历框架目录,生成紧凑索引 `index.yaml` 并校验。
+//! `complai compliance build <framework>`:遍历框架目录,生成紧凑索引 `index.yaml` 并校验。
 
 use std::ffi::OsStr;
 use std::fs;
@@ -15,7 +15,7 @@ pub fn build(framework: &str) -> eyre::Result<()> {
     let dir = framework_dir(framework)?;
     if !dir.exists() {
         eyre::bail!(
-            "框架目录不存在:{}(先运行 `complai kb scaffold {framework}`)",
+            "框架目录不存在:{}(先运行 `complai compliance scaffold {framework}`)",
             dir.display()
         );
     }

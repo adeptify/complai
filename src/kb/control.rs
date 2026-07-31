@@ -89,7 +89,7 @@ pub struct ControlIndexEntry {
     pub file: String,
 }
 
-/// 框架的紧凑索引(生成产物,`kb build` 写入 `index.yaml`)。
+/// 框架的紧凑索引(生成产物,`compliance build` 写入 `index.yaml`)。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControlIndex {
     pub framework: Framework,

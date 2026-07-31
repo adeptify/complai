@@ -1,6 +1,6 @@
 ---
 name: doc-ingest
-description: 把 Excel(.xlsx)等文档灌入知识库。先 `complai parse` 抽成表格,再按列映射成 facts(`system ingest --from`)或控制项正文(`kb ingest`),或直接 `matrix set`。
+description: 把 Excel(.xlsx)等文档灌入知识库。先 `complai parse` 抽成表格,再按列映射成 facts(`system ingest --from`)或控制项正文(`compliance ingest`),或直接 `matrix set`。
 ---
 
 # 文档灌库 (doc-ingest)
@@ -17,10 +17,10 @@ description: 把 Excel(.xlsx)等文档灌入知识库。先 `complai parse` 抽�
    | 表类型 | 识别线索 | 灌入目标 | 命令 |
    |---|---|---|---|
    | 资产清单 / 数据流 / 部署等 | 列含 资产名/类型/位置/数据项 等 | 系统知识(facts) | 产出 `facts.yaml` -> `complai system ingest --from facts.yaml` |
-   | 控制要求清单 | 列含 控制ID + 要求摘要/实施指引/常见缺陷 | 控制项正文 | 产出 `notes.md`(`@@ <控制ID>` 分块)-> `complai kb ingest <framework> notes.md` |
+   | 控制要求清单 | 列含 控制ID + 要求摘要/实施指引/常见缺陷 | 控制项正文 | 产出 `notes.md`(`@@ <控制ID>` 分块)-> `complai compliance ingest <framework> notes.md` |
    | 差距表 | 列含 控制ID + 状态 + 缺口 | 矩阵状态 | `complai matrix set <id> <status> --gap "..."` |
 
-3. **核对**:`complai system find --control <id>` / `complai kb show <id>` / `complai matrix show --status gap`。
+3. **核对**:`complai system find --control <id>` / `complai compliance show <id>` / `complai matrix show --status gap`。
 
 ## facts.yaml 格式(`system ingest --from`)
 
@@ -38,7 +38,7 @@ facts:
     body: "订单含手机号/地址,落库前 AES-256 加密"
 ```
 
-## notes.md 格式(`kb ingest`,控制项正文)
+## notes.md 格式(`compliance ingest`,控制项正文)
 
 ```
 @@ dengbao-2.0:8.1.4.1

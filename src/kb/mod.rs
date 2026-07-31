@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use eyre::WrapErr;
 
-use crate::cli::KbCommand;
+use crate::cli::ComplianceCommand;
 
 /// 知识库根目录。
 ///
@@ -30,15 +30,15 @@ pub fn framework_dir(framework: &str) -> eyre::Result<PathBuf> {
     Ok(kb_root()?.join("compliance").join(framework))
 }
 
-/// 分发 `kb` 子命令。
-pub fn run(cmd: KbCommand) -> eyre::Result<()> {
+/// 分发 `compliance` 子命令。
+pub fn run(cmd: ComplianceCommand) -> eyre::Result<()> {
     match cmd {
-        KbCommand::Scaffold { framework } => scaffold::scaffold(&framework),
-        KbCommand::Build { framework } => build::build(&framework),
-        KbCommand::Show { id } => query::show(&id),
-        KbCommand::List { framework, domain } => {
+        ComplianceCommand::Scaffold { framework } => scaffold::scaffold(&framework),
+        ComplianceCommand::Build { framework } => build::build(&framework),
+        ComplianceCommand::Show { id } => query::show(&id),
+        ComplianceCommand::List { framework, domain } => {
             query::list(framework.as_deref(), domain.as_deref())
         }
-        KbCommand::Ingest { framework, file } => ingest::ingest(&framework, &file),
+        ComplianceCommand::Ingest { framework, file } => ingest::ingest(&framework, &file),
     }
 }

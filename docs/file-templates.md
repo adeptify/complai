@@ -14,7 +14,7 @@
 ~/.complai/kb/
 ├── compliance/                     # 合规框架(跨项目共享)
 │   └── dengbao-2.0/
-│       ├── index.yaml              # kb build 生成(紧凑索引,无正文)
+│       ├── index.yaml              # compliance build 生成(紧凑索引,无正文)
 │       ├── 技术/<类别>/<id>.md      # 控制项
 │       └── 管理/<类别>/<id>.md
 └── system/                         # 业务系统(跨项目共享,按 slug)
@@ -42,7 +42,7 @@ order-platform-dengbao3/            # 项目根
 
 ### 2.1 控制项 `compliance/<框架>/<域>/<类别>/<id>.md`
 
-`kb scaffold` 生成空桩;`kb ingest` 或手工填正文。范例见 [`templates/control.example.md`](../templates/control.example.md)。
+`compliance scaffold` 生成空桩;`compliance ingest` 或手工填正文。范例见 [`templates/control.example.md`](../templates/control.example.md)。
 
 ```markdown
 ---
@@ -77,7 +77,7 @@ last_reviewed: 2026-07-29
 
 字段:`id`/`framework`/`domain`(技术|管理)/`category`/`control_id`/`title`/`levels`/`tags`/`mappings`(跨框架,只存 ID)/`expected_evidence`/`excerpt_status`(empty|partial|complete)/`last_reviewed`。
 
-### 2.2 摘录笔记 `notes.md`(`kb ingest` 输入)
+### 2.2 摘录笔记 `notes.md`(`compliance ingest` 输入)
 
 每块以 `@@ <control-id>` 起首。模板见 [`templates/notes.md`](../templates/notes.md)。
 
@@ -199,9 +199,9 @@ evidence:
 3. (可选)期望证据、跨框架映射。
 
 ```sh
-complai kb scaffold dengbao-2.0              # 生成控制桩
+complai compliance scaffold dengbao-2.0              # 生成控制桩
 # 写 notes.md(@@ <id> 分块)
-complai kb ingest dengbao-2.0 notes.md       # 灌正文 + 重建索引
+complai compliance ingest dengbao-2.0 notes.md       # 灌正文 + 重建索引
 ```
 
 **system KB**(每个系统一次,可被多项目复用):

@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "complai",
     version,
-    about = "合规审计 agent 的命令行工具:知识库、系统、项目、矩阵、事实、证据、报告"
+    about = "合规审计 agent 的命令行工具:合规库、系统、项目、矩阵、事实、证据、报告"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -16,9 +16,9 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// 合规知识库(框架控制项,跨项目共享)
-    Kb {
+    Compliance {
         #[command(subcommand)]
-        command: KbCommand,
+        command: ComplianceCommand,
     },
     /// 业务系统知识库(系统事实,跨项目共享,按 system slug)
     System {
@@ -55,7 +55,7 @@ pub enum Commands {
 }
 
 #[derive(Subcommand, Debug)]
-pub enum KbCommand {
+pub enum ComplianceCommand {
     /// 按内置结构表生成控制项桩文件
     Scaffold { framework: String },
     /// 遍历框架目录,生成 index.yaml 并校验

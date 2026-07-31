@@ -1,10 +1,10 @@
-# 摘录笔记模板 —— `complai kb ingest <framework> <本文件>` 的输入
+# 摘录笔记模板 —— `complai compliance ingest <framework> <本文件>` 的输入
 #
 # 格式:每块以 `@@ <control-id>` 起首(行首 @@ 加空白),块内是该控制的正文。
 #       ingest 时会自动在每个块正文前补 `# <控制点标题>`(标题取自知识库),
 #       并把 excerpt_status 置 partial、last_reviewed 置今日,最后重建索引。
 #
-# 用法:complai kb ingest dengbao-2.0 notes.md
+# 用法:complai compliance ingest dengbao-2.0 notes.md
 #
 # 正文建议沿用三段结构:## 要求摘要 / ## 实施指引 / ## 常见缺陷
 # (gap-analysis skill 会读取这三段做差距判定。)

@@ -41,7 +41,7 @@ pub fn init(name: &str, system: &str, framework: &str, level: u8) -> eyre::Resul
     let index_path = framework_dir(framework)?.join("index.yaml");
     if !index_path.exists() {
         eyre::bail!(
-            "框架 {framework} 的知识库索引不存在({});先 `complai kb scaffold {framework}`",
+            "框架 {framework} 的知识库索引不存在({});先 `complai compliance scaffold {framework}`",
             index_path.display()
         );
     }

@@ -10,7 +10,7 @@ description: 对比项目业务系统知识与等保控制项,填充控制矩阵
 核心模型:`控制矩阵 = 差距分析(合规知识库, 业务系统知识库) + 证据`。
 
 ## 前置条件
-- 通用知识库已就绪:`complai kb list --framework dengbao-2.0` 能列出控制项。
+- 通用知识库已就绪:`complai compliance list --framework dengbao-2.0` 能列出控制项。
   若控制正文仍"待摘录",先停下提示用户补摘录,不要臆测要求。
 - 项目已初始化并有若干系统事实:`complai system find --control dengbao-2.0:<id>` 能查到事实。
 
@@ -18,12 +18,12 @@ description: 对比项目业务系统知识与等保控制项,填充控制矩阵
 
 1. **取控制清单**(只读紧凑索引,不加载正文):
    ```
-   complai kb list --framework dengbao-2.0 --domain 技术
-   complai kb list --framework dengbao-2.0 --domain 管理
+   complai compliance list --framework dengbao-2.0 --domain 技术
+   complai compliance list --framework dengbao-2.0 --domain 管理
    ```
 
 2. **逐项拉取聚焦包**(每个控制只加载相关材料,不整库):
-   - `complai kb show dengbao-2.0:<id>` —— 控制要求摘要/实施指引/常见缺陷
+   - `complai compliance show dengbao-2.0:<id>` —— 控制要求摘要/实施指引/常见缺陷
    - `complai system find --control dengbao-2.0:<id>` —— 关联的系统事实
    - `complai matrix trace dengbao-2.0:<id>` —— 现有矩阵状态与已挂证据/事实
 

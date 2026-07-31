@@ -1,4 +1,4 @@
-//! `complai kb ingest <framework> <file>`:把批量摘录笔记拆成各控制文件。
+//! `complai compliance ingest <framework> <file>`:把批量摘录笔记拆成各控制文件。
 //!
 //! 笔记格式:每块以 `@@ <control-id>` 起始(行首 `@@` 加空白),后续行直到下一块
 //! 为该控制的正文。已有控制桩的 frontmatter 保留,正文替换为摘录,
@@ -22,7 +22,7 @@ pub fn ingest(framework: &str, file: &str) -> eyre::Result<()> {
         eyre::bail!("笔记 {file} 中未找到任何 `@@ <control-id>` 块");
     }
 
-    let index = load_index(framework).wrap_err("加载知识库索引失败(先 complai kb build)")?;
+    let index = load_index(framework).wrap_err("加载知识库索引失败(先 complai compliance build)")?;
 
     let mut updated = 0usize;
     let mut skipped = 0usize;
@@ -38,7 +38,7 @@ pub fn ingest(framework: &str, file: &str) -> eyre::Result<()> {
         let entry = match index.controls.iter().find(|e| e.id == cid) {
             Some(e) => e,
             None => {
-                eprintln!("跳过 {cid}:知识库中无此控制(先 complai kb scaffold)");
+                eprintln!("跳过 {cid}:知识库中无此控制(先 complai compliance scaffold)");
                 skipped += 1;
                 continue;
             }

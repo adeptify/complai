@@ -1,0 +1,32 @@
+---
+source: tests/flow.rs
+expression: content
+---
+---
+id: "dengbao-2.0:8.1.4.1"
+framework: dengbao-2.0
+domain: 技术
+category: 安全计算环境
+control_id: "8.1.4.1"
+title: 身份鉴别
+levels:
+  - 3
+tags: []
+mappings: {}
+expected_evidence: []
+excerpt_status: empty
+---
+
+# 身份鉴别
+
+## 要求摘要
+
+(待摘录:用自己的话概述该控制点的要求,不复录标准原文)
+
+## 实施指引
+
+(待摘录)
+
+## 常见缺陷
+
+(待摘录)

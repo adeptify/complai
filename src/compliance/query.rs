@@ -7,8 +7,9 @@ use std::str::FromStr;
 
 use eyre::WrapErr;
 
-use crate::kb::control::ControlIndex;
-use crate::kb::{framework_dir, kb_root};
+use crate::compliance::control::ControlIndex;
+use crate::compliance::framework_dir;
+use crate::paths::kb_root;
 use crate::model::{ControlId, Domain};
 
 /// 加载某框架的索引(若不存在,提示先 build)。

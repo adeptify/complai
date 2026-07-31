@@ -7,8 +7,8 @@ use std::fs;
 
 use eyre::WrapErr;
 
-use crate::kb::control::ControlIndex;
-use crate::kb::framework_dir;
+use crate::compliance::control::ControlIndex;
+use crate::compliance::framework_dir;
 use crate::model::Framework;
 use crate::project::matrix::{Matrix, MatrixEntry, Scope};
 use crate::project::ProjectMeta;

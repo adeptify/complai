@@ -8,8 +8,8 @@ use std::fs;
 
 use eyre::WrapErr;
 
-use crate::kb::control::ControlIndexEntry;
-use crate::kb::query::load_index;
+use crate::compliance::control::ControlIndexEntry;
+use crate::compliance::query::load_index;
 use crate::model::{ControlId, ControlStatus};
 use crate::project::matrix::MatrixEntry;
 use crate::project::project_root;

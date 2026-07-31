@@ -5,7 +5,7 @@
 ## 等保结构表的控制点 ID 由位置派生,重排即漂移
 
 `data/dengbao-2.0.yaml` 里每个 category 的 `points` 是纯短名列表,
-控制点 ID 在 `src/kb/scaffold.rs` 里按 `enumerate()` 派生(`{prefix}.{i+1}`,
+控制点 ID 在 `src/compliance/scaffold.rs` 里按 `enumerate()` 派生(`{prefix}.{i+1}`,
 见 `scaffold_dengbao` 内 `format!("{}.{}", category.prefix, i + 1)`)。
 
 后果:在 yaml 里重排某个 category 的 `points`、或中间插入一个控制点,
@@ -37,7 +37,7 @@ compliance KB / system KB / 项目工作区混在一起,无版本、无共享机
   KB 漂移后,同一份 `matrix.yaml` / 报告无法复现。应记录评估时所用的
   framework tag 与 system tag。
 - 框架结构表 `data/dengbao-2.0.yaml` 当前编译期 `include_str!` 进二进制
-  (`src/kb/scaffold.rs`)。若 compliance KB 独立成共享 repo,该表应随之
+  (`src/compliance/scaffold.rs`)。若 compliance KB 独立成共享 repo,该表应随之
   搬入,`scaffold` 改从 `COMPLAI_KB_DIR` 读取,而非内置。
 - 控制点 ID 必须保持"只增不改、废弃不重编号",否则 matrix/evidence/
   related_controls 引用会断裂(与本文档第一条隐患同源)。

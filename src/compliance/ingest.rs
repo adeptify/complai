@@ -10,8 +10,8 @@ use chrono::Local;
 use eyre::WrapErr;
 
 use crate::frontmatter;
-use crate::kb::control::{ControlFrontmatter, ExcerptStatus};
-use crate::kb::{build, framework_dir, query::load_index};
+use crate::compliance::control::{ControlFrontmatter, ExcerptStatus};
+use crate::compliance::{build, framework_dir, query::load_index};
 use crate::model::ControlId;
 
 pub fn ingest(framework: &str, file: &str) -> eyre::Result<()> {

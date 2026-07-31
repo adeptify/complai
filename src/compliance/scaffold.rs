@@ -12,8 +12,8 @@ use eyre::WrapErr;
 use serde::Deserialize;
 
 use crate::frontmatter;
-use crate::kb::control::{ControlFrontmatter, ExcerptStatus};
-use crate::kb::framework_dir;
+use crate::compliance::control::{ControlFrontmatter, ExcerptStatus};
+use crate::compliance::framework_dir;
 use crate::model::{ControlId, Domain, Framework};
 
 /// 内置等保 2.0 结构表(只含 ID + 控制点短名,不含标准要求正文)。
@@ -99,7 +99,7 @@ fn scaffold_dengbao() -> eyre::Result<()> {
     }
 
     // 生成桩文件后立即构建索引,使 `compliance list`/`compliance show` 可用。
-    crate::kb::build::build(&structure.framework)?;
+    crate::compliance::build::build(&structure.framework)?;
 
     println!(
         "scaffolded {created} controls ({skipped} already existed) for {} into {}",

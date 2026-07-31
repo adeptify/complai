@@ -7,8 +7,8 @@ use eyre::WrapErr;
 use walkdir::WalkDir;
 
 use crate::frontmatter;
-use crate::kb::control::{ControlFrontmatter, ControlIndex, ControlIndexEntry};
-use crate::kb::framework_dir;
+use crate::compliance::control::{ControlFrontmatter, ControlIndex, ControlIndexEntry};
+use crate::compliance::framework_dir;
 use crate::model::Framework;
 
 pub fn build(framework: &str) -> eyre::Result<()> {

@@ -8,7 +8,7 @@ pub mod init;
 use std::path::PathBuf;
 
 use crate::cli::SystemCommand;
-use crate::kb::kb_root;
+use crate::paths::kb_root;
 
 /// 系统知识库根:`<kb_root>/system`。
 pub fn system_root() -> eyre::Result<PathBuf> {

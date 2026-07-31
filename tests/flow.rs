@@ -5,15 +5,15 @@
 use serial_test::serial;
 use tempfile::TempDir;
 
-use complai::{kb, project, reports, system};
+use complai::{compliance, project, reports, system};
 
 #[test]
 #[serial]
 fn kb_scaffold_produces_full_index() {
     let kb_dir = TempDir::new().unwrap();
     unsafe { std::env::set_var("COMPLAI_KB_DIR", kb_dir.path()); }
-    kb::scaffold::scaffold("dengbao-2.0").unwrap();
-    let index = kb::query::load_index("dengbao-2.0").unwrap();
+    compliance::scaffold::scaffold("dengbao-2.0").unwrap();
+    let index = compliance::query::load_index("dengbao-2.0").unwrap();
     assert_eq!(index.controls.len(), 70);
     assert_eq!(index.controls[0].id.control_id, "8.1.1.1");
     assert_eq!(index.controls[1].id.control_id, "8.1.1.2");
@@ -26,8 +26,8 @@ fn kb_scaffold_produces_full_index() {
 fn scaffolded_control_file_matches_snapshot() {
     let kb_dir = TempDir::new().unwrap();
     unsafe { std::env::set_var("COMPLAI_KB_DIR", kb_dir.path()); }
-    kb::scaffold::scaffold("dengbao-2.0").unwrap();
-    let dir = kb::framework_dir("dengbao-2.0").unwrap();
+    compliance::scaffold::scaffold("dengbao-2.0").unwrap();
+    let dir = compliance::framework_dir("dengbao-2.0").unwrap();
     let content =
         std::fs::read_to_string(dir.join("技术/安全计算环境/8.1.4.1.md")).unwrap();
     insta::assert_snapshot!(content);
@@ -38,7 +38,7 @@ fn scaffolded_control_file_matches_snapshot() {
 fn system_init_and_ingest() {
     let kb_dir = TempDir::new().unwrap();
     unsafe { std::env::set_var("COMPLAI_KB_DIR", kb_dir.path()); }
-    kb::scaffold::scaffold("dengbao-2.0").unwrap();
+    compliance::scaffold::scaffold("dengbao-2.0").unwrap();
     system::init::init("s1", "系统一".to_string()).unwrap();
 
     let yaml = r#"facts:
@@ -72,7 +72,7 @@ fn system_init_and_ingest() {
 fn project_end_to_end_produces_gap_report() {
     let kb_dir = TempDir::new().unwrap();
     unsafe { std::env::set_var("COMPLAI_KB_DIR", kb_dir.path()); }
-    kb::scaffold::scaffold("dengbao-2.0").unwrap();
+    compliance::scaffold::scaffold("dengbao-2.0").unwrap();
     system::init::init("order-platform", "订单平台".to_string()).unwrap();
 
     let proj_root = TempDir::new().unwrap();
@@ -131,7 +131,7 @@ fn system_shared_across_projects() {
     // 同一 system 被两个项目引用;系统事实只存一份,project init 不重建已有系统。
     let kb_dir = TempDir::new().unwrap();
     unsafe { std::env::set_var("COMPLAI_KB_DIR", kb_dir.path()); }
-    kb::scaffold::scaffold("dengbao-2.0").unwrap();
+    compliance::scaffold::scaffold("dengbao-2.0").unwrap();
     system::init::init("shared-sys", "共享系统".to_string()).unwrap();
     system::fact::add(
         "shared-sys",

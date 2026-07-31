@@ -212,8 +212,8 @@ pub fn trace(control_str: &str) -> eyre::Result<()> {
 
     // 1) 控制正文(compliance KB)。
     let framework = matrix.framework.as_str().to_string();
-    let kb_dir = crate::kb::framework_dir(&framework)?;
-    let kb_index = crate::kb::query::load_index(&framework)?;
+    let kb_dir = crate::compliance::framework_dir(&framework)?;
+    let kb_index = crate::compliance::query::load_index(&framework)?;
     let ctl = kb_index
         .controls
         .iter()

@@ -1,10 +1,8 @@
 ---
 name: complai
-description: >-
-  安装、配置并操作 Complai 合规审计 CLI；项目初始化、文档灌库和差距分析
-  workflow 由 `complai` 二进制按需提供。用于用户要求安装或升级 Complai、初始化
-  合规环境、创建合规项目、导入审计材料、评估合规差距、管理事实与证据或生成
-  报告时。
+description: "Complai CLI for AI agents — 面向合规审计准备方，提供框架控制库、系统事实、项目矩阵、证据与报告管理；项目初始化、文档灌库和差距分析 workflow 内置于 `complai` 二进制并按需加载。
+Use whenever 用户要求安装或升级 Complai、初始化合规环境、创建等保或其他框架项目、导入审计材料、评估合规差距、管理控制矩阵与证据，或者生成合规报告。
+Triggers: 'install complai', 'set up complai', '初始化合规项目', '等保项目', '导入资产清单', '文档灌库', '差距分析', '控制矩阵', '证据收集', '合规报告'."
 ---
 
 # Complai CLI

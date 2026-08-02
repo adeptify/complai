@@ -48,3 +48,9 @@ compliance KB / system KB / 项目工作区混在一起,无版本、无共享机
 `ModuleNotFoundError: No module named 'yaml'`,因此无法用标准校验器检查 skill。
 校验器所在的系统 skill 没有提供隔离环境或依赖安装入口；后续应在其运行时
 捆绑 PyYAML,或改用不依赖第三方 YAML 包的 frontmatter 校验。
+
+## PyPI / uv 二进制发行尚未配置
+
+当前只发布 crates.io 包。若要支持 `uv tool install complai`,后续需增加
+`pyproject.toml` 与 Maturin `bin` bindings,并用 CI 为 Linux、macOS、Windows
+构建 wheel 后发布到 PyPI；实施前还需确认 PyPI 包名与目标平台矩阵。

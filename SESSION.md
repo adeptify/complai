@@ -42,4 +42,9 @@ compliance KB / system KB / 项目工作区混在一起,无版本、无共享机
 - 控制点 ID 必须保持"只增不改、废弃不重编号",否则 matrix/evidence/
   related_controls 引用会断裂(与本文档第一条隐患同源)。
 
+## `skill-creator` 校验器缺少运行时依赖
 
+当前环境运行系统 `skill-creator` 的 `quick_validate.py` 会立即报
+`ModuleNotFoundError: No module named 'yaml'`,因此无法用标准校验器检查 skill。
+校验器所在的系统 skill 没有提供隔离环境或依赖安装入口；后续应在其运行时
+捆绑 PyYAML,或改用不依赖第三方 YAML 包的 frontmatter 校验。

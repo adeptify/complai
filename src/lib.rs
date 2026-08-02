@@ -11,4 +11,5 @@ pub mod parse;
 pub mod paths;
 pub mod project;
 pub mod reports;
+pub mod skill;
 pub mod system;

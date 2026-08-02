@@ -10,8 +10,14 @@
 
 ```sh
 cargo build
-cargo test                 # 19 个测试:单元 + 集成 + insta 快照
+cargo test                 # 21 个测试:单元 + 集成 + insta 快照
 cargo clippy --all-targets # 无警告
+```
+
+从 crates.io 安装已发布版本:
+
+```sh
+cargo install complai --locked
 ```
 
 ## 环境变量
@@ -46,7 +52,18 @@ complai gen report                         # -> drafts/compliance-report.md
 
 `complai parse <file>.xlsx` 抽 Excel 为 Markdown 表格,供 agent 灌库。
 
-Skills(agent 编排 CLI,均只调 CLI、不直接改文件):`project-init`(立项:绑定系统×框架)、`gap-analysis`(差距分析)、`doc-ingest`(xlsx 灌库)。
+Skills(agent 编排 CLI,均只调 CLI、不直接改文件):`complai`(安装、配置与工作流路由)、`project-init`(立项:绑定系统×框架)、`gap-analysis`(差距分析)、`doc-ingest`(xlsx 灌库)。
+
+安装 CLI 后可按需发现和获取完整 skill prompt；正文编译在二进制中,不依赖源码目录:
+
+```sh
+cargo install --path . --locked
+complai skill list
+complai skill get project-init
+```
+
+主 skill 可直接复制 `skills/complai/` 到 agent 的 skill 目录；仅安装了 CLI 时,
+也可用 `complai skill get complai` 获取可独立使用的 `SKILL.md`。
 
 ## 备注
 

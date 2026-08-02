@@ -1,0 +1,4 @@
+interface:
+  display_name: "Complai 合规审计"
+  short_description: "安装、配置并通过 CLI 编排 Complai 合规审计工作流"
+  default_prompt: "使用 $complai 安装并配置 CLI，然后选择合适的合规审计工作流。"

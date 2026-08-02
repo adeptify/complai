@@ -2,6 +2,26 @@
 name = "complai"
 version = "0.1.0"
 edition = "2024"
+description = "Compliance audit CLI and agent skills for gap analysis, evidence collection, and reporting"
+license = "MIT"
+repository = "https://github.com/adeptify/complai"
+homepage = "https://github.com/adeptify/complai"
+readme = "README.md"
+keywords = ["compliance", "audit", "security", "cli", "dengbao"]
+categories = ["command-line-utilities"]
+include = [
+    "src/**",
+    "data/**",
+    "skills/**",
+    "templates/**",
+    "docs/**",
+    "tests/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "PLAN.md",
+    "LICENSE",
+]
 
 [dependencies]
 calamine = "0.36.1"

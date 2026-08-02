@@ -15,6 +15,11 @@ pub struct Cli {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+    /// 按需获取内置 agent skill 的上下文与工作流
+    Skill {
+        #[command(subcommand)]
+        command: SkillCommand,
+    },
     /// 合规知识库(框架控制项,跨项目共享)
     Compliance {
         #[command(subcommand)]
@@ -52,6 +57,14 @@ pub enum Commands {
     },
     /// 解析文档(xlsx -> Markdown 表格)供灌库
     Parse { file: String },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SkillCommand {
+    /// 列出可按需加载的内置 skill
+    List,
+    /// 输出指定 skill 的完整上下文与 prompt
+    Get { skill_name: String },
 }
 
 #[derive(Subcommand, Debug)]

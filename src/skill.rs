@@ -1,6 +1,8 @@
-//! 内置 agent skill 的发现与按需加载。
+//! 内置 agent workflow skill 的发现与按需加载。
 //!
-//! Skill 正文编译进二进制，使安装后的 `complai` 不依赖源码目录。
+//! 真正的 workflow 正文放在 `src/skills_content/` 并编译进二进制，使安装后的
+//! `complai` 不依赖源码目录。顶层 `skills/complai/` 只保留供 agent 客户端安装的
+//! discovery stub；二者分离可以避免把所有 workflow 常驻加载到上下文。
 //! `list` 只给路由所需的紧凑摘要，`get` 才输出完整 prompt，避免把所有
 //! 工作流同时塞进 agent 上下文。
 
@@ -15,24 +17,19 @@ pub struct Skill {
 
 const SKILLS: &[Skill] = &[
     Skill {
-        name: "complai",
-        description: "安装、配置并路由 Complai 合规审计工作流",
-        prompt: include_str!("../skills/complai/SKILL.md"),
-    },
-    Skill {
         name: "project-init",
         description: "初始化系统与合规框架绑定的项目工作区",
-        prompt: include_str!("../skills/project-init/SKILL.md"),
+        prompt: include_str!("skills_content/project-init/SKILL.md"),
     },
     Skill {
         name: "doc-ingest",
         description: "解析 Excel 等文档并灌入对应知识库",
-        prompt: include_str!("../skills/doc-ingest/SKILL.md"),
+        prompt: include_str!("skills_content/doc-ingest/SKILL.md"),
     },
     Skill {
         name: "gap-analysis",
         description: "逐控制项执行差距分析并生成报告",
-        prompt: include_str!("../skills/gap-analysis/SKILL.md"),
+        prompt: include_str!("skills_content/gap-analysis/SKILL.md"),
     },
 ];
 
@@ -101,5 +98,14 @@ mod tests {
                 skill.name
             );
         }
+    }
+
+    #[test]
+    fn registry_contains_only_cli_workflow_guides() {
+        let names = available()
+            .iter()
+            .map(|skill| skill.name)
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["project-init", "doc-ingest", "gap-analysis"]);
     }
 }

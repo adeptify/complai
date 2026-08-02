@@ -10,7 +10,7 @@
 
 ```sh
 cargo build
-cargo test                 # 21 个测试:单元 + 集成 + insta 快照
+cargo test                 # 22 个测试:单元 + 集成 + insta 快照
 cargo clippy --all-targets # 无警告
 ```
 
@@ -52,18 +52,29 @@ complai gen report                         # -> drafts/compliance-report.md
 
 `complai parse <file>.xlsx` 抽 Excel 为 Markdown 表格,供 agent 灌库。
 
-Skills(agent 编排 CLI,均只调 CLI、不直接改文件):`complai`(安装、配置与工作流路由)、`project-init`(立项:绑定系统×框架)、`gap-analysis`(差距分析)、`doc-ingest`(xlsx 灌库)。
+## Agent skills
 
-安装 CLI 后可按需发现和获取完整 skill prompt；正文编译在二进制中,不依赖源码目录:
+参照 discovery stub + CLI 内置工作流模式,agent 客户端只安装
+`skills/complai/SKILL.md`。真正的 workflow prompt 放在 `src/skills_content/`,
+随 crate 编译进二进制,因此内容始终与已安装的 `complai` 版本一致,不会出现
+skill 缓存与 CLI 版本漂移。
+
+从 crates.io 安装 CLI 后,按需发现和获取工作流:
 
 ```sh
-cargo install --path . --locked
+cargo install complai --locked
 complai skill list
 complai skill get project-init
 ```
 
-主 skill 可直接复制 `skills/complai/` 到 agent 的 skill 目录；仅安装了 CLI 时,
-也可用 `complai skill get complai` 获取可独立使用的 `SKILL.md`。
+当前内置 workflow:
+
+- `project-init`:立项并绑定系统与框架。
+- `doc-ingest`:把 Excel 等材料灌入知识库或矩阵。
+- `gap-analysis`:逐控制项分析差距并生成报告。
+
+新增或修改 workflow 时,编辑 `src/skills_content/<name>/SKILL.md` 并注册到
+`src/skill.rs`;顶层 `skills/` 只保留 `complai` discovery skill。
 
 ## 备注
 

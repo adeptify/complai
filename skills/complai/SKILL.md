@@ -1,6 +1,10 @@
 ---
 name: complai
-description: Complai 合规审计 CLI 的 discovery skill。实际的项目初始化、文档灌库和差距分析工作流内置于 `complai` 二进制。用于安装或升级 Complai、初始化合规环境、查询 CLI 命令、创建合规项目、导入审计材料、执行差距分析、管理事实与证据或生成报告时。
+description: >-
+  安装、配置并操作 Complai 合规审计 CLI；项目初始化、文档灌库和差距分析
+  workflow 由 `complai` 二进制按需提供。用于用户要求安装或升级 Complai、初始化
+  合规环境、创建合规项目、导入审计材料、评估合规差距、管理事实与证据或生成
+  报告时。
 ---
 
 # Complai CLI

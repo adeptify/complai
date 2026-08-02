@@ -57,7 +57,8 @@ complai gen report                         # -> drafts/compliance-report.md
 参照 discovery stub + CLI 内置工作流模式,agent 客户端只安装
 `skills/complai/SKILL.md`。真正的 workflow prompt 放在 `src/skills_content/`,
 随 crate 编译进二进制,因此内容始终与已安装的 `complai` 版本一致,不会出现
-skill 缓存与 CLI 版本漂移。
+skill 缓存与 CLI 版本漂移。完整分层、description 和维护约定见
+[`skills/SKILLS.md`](skills/SKILLS.md)。
 
 从 crates.io 安装 CLI 后,按需发现和获取工作流:
 

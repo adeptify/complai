@@ -18,17 +18,17 @@ pub struct Skill {
 const SKILLS: &[Skill] = &[
     Skill {
         name: "project-init",
-        description: "初始化系统与合规框架绑定的项目工作区",
+        description: "创建合规项目并绑定系统、框架与等级",
         prompt: include_str!("skills_content/project-init/SKILL.md"),
     },
     Skill {
         name: "doc-ingest",
-        description: "解析 Excel 等文档并灌入对应知识库",
+        description: "解析审计文档并导入事实、控制正文或矩阵",
         prompt: include_str!("skills_content/doc-ingest/SKILL.md"),
     },
     Skill {
         name: "gap-analysis",
-        description: "逐控制项执行差距分析并生成报告",
+        description: "基于控制、事实与证据评估差距并生成报告",
         prompt: include_str!("skills_content/gap-analysis/SKILL.md"),
     },
 ];

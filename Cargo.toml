@@ -1,6 +1,6 @@
 [package]
 name = "complai"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 description = "Compliance audit CLI and agent skills for gap analysis, evidence collection, and reporting"
 license = "MIT"

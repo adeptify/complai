@@ -1,6 +1,10 @@
 ---
 name: doc-ingest
-description: 把 Excel(.xlsx)等文档灌入知识库。先 `complai parse` 抽成表格,再按列映射成 facts(`system ingest --from`)或控制项正文(`compliance ingest`),或直接 `matrix set`。
+description: >-
+  解析并导入 Excel（.xlsx）等合规审计材料，把表格列映射为系统事实、控制项正文
+  或矩阵状态。用于用户要求导入资产清单、数据流、控制要求清单或差距表，或者需要
+  通过 `complai parse`、`system ingest`、`compliance ingest` 或 `matrix set`
+  完成文档灌库时。
 ---
 
 # 文档灌库 (doc-ingest)

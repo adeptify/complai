@@ -1,6 +1,9 @@
 ---
 name: project-init
-description: 初始化一个合规备案项目。确认框架与定级、系统(复用或新建),再 `complai project init` 绑定系统×框架,预填矩阵,并指出后续步骤。
+description: >-
+  创建并初始化合规备案项目，确认系统、框架和等级后通过 `complai project init`
+  绑定系统与框架并预填控制矩阵。用于用户要求新建合规项目、复用或创建系统知识库、
+  确认等保定级、初始化矩阵或规划后续文档灌库与差距分析时。
 ---
 
 # 项目初始化 (project-init)

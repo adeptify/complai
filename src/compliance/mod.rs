@@ -2,7 +2,6 @@
 
 pub mod build;
 pub mod control;
-pub mod ingest;
 pub mod query;
 pub mod scaffold;
 
@@ -24,6 +23,5 @@ pub fn run(cmd: ComplianceCommand) -> eyre::Result<()> {
         ComplianceCommand::List { framework, domain } => {
             query::list(framework.as_deref(), domain.as_deref())
         }
-        ComplianceCommand::Ingest { framework, file } => ingest::ingest(&framework, &file),
     }
 }

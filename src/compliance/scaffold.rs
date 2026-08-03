@@ -11,9 +11,9 @@ use std::str::FromStr;
 use eyre::WrapErr;
 use serde::Deserialize;
 
-use crate::frontmatter;
 use crate::compliance::control::{ControlFrontmatter, ExcerptStatus};
 use crate::compliance::framework_dir;
+use crate::frontmatter;
 use crate::model::{ControlId, Domain, Framework};
 
 /// 内置等保 2.0 结构表(只含 ID + 控制点短名,不含标准要求正文)。
@@ -47,8 +47,8 @@ pub fn scaffold(framework: &str) -> eyre::Result<()> {
 }
 
 fn scaffold_dengbao() -> eyre::Result<()> {
-    let structure: FrameworkStructure = serde_yml::from_str(DENGBAO_2_0_STRUCTURE)
-        .wrap_err("解析内置 dengbao-2.0 结构表失败")?;
+    let structure: FrameworkStructure =
+        serde_yml::from_str(DENGBAO_2_0_STRUCTURE).wrap_err("解析内置 dengbao-2.0 结构表失败")?;
     let dir = framework_dir(&structure.framework)?;
     let mut created = 0usize;
     let mut skipped = 0usize;
@@ -83,6 +83,7 @@ fn scaffold_dengbao() -> eyre::Result<()> {
                     expected_evidence: Vec::new(),
                     excerpt_status: ExcerptStatus::Empty,
                     last_reviewed: None,
+                    ingest: None,
                 };
                 let body = default_body(point);
                 let content = frontmatter::serialize(&fm, &body)?;

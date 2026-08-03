@@ -56,7 +56,7 @@ complai skill get "${skill_name}"
 | 用户任务 | 加载命令 |
 |---|---|
 | 创建系统、绑定框架、初始化项目 | `complai skill get project-init` |
-| 从 `.xlsx` 等文档导入事实、控制正文或差距 | `complai skill get doc-ingest` |
+| 从任意可访问文档导入事实、控制正文或差距 | `complai skill get doc-ingest` |
 | 逐控制项判断状态、关联材料并生成差距报告 | `complai skill get gap-analysis` |
 
 上表是当前常见任务的路由提示。如果 `skill list` 与上表不同，以 CLI 输出为准，
@@ -66,12 +66,12 @@ complai skill get "${skill_name}"
 
 ```sh
 complai compliance --help  # 框架控制库
+complai ingest --help      # 统一结构化导入
 complai system --help      # 跨项目共享的系统事实
 complai project --help     # 项目初始化
 complai fact --help        # 项目专属事实
 complai matrix --help      # 控制矩阵与最小上下文追踪
 complai evidence --help    # 证据登记
-complai parse --help       # Excel 解析
 complai gen --help         # 报告生成
 ```
 
@@ -81,5 +81,7 @@ complai gen --help         # 报告生成
 
 - 通过 CLI 读写 Complai 数据，不直接修改共享 KB、矩阵、事实或证据索引。
 - 先用 `list`、`find`、`show` 或 `trace` 读取最小必要上下文，再执行写命令。
+- 批量抽取只使用统一 ingest bundle；先获取 `ingest schema`，再依次运行
+  `ingest validate` 和 `ingest plan`，确认计划后才 `ingest apply`。
 - 缺少框架正文、系统事实、证据或用户决策时明确指出，不要补造。
-- 项目名、系统 slug、框架、等级、状态和导入列映射按已加载 workflow 的确认规则处理。
+- 项目名、系统 slug、框架、等级、状态和抽取映射按已加载 workflow 的确认规则处理。

@@ -7,7 +7,48 @@
 use std::fmt;
 use std::str::FromStr;
 
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+
+/// Agent 抽取记录的置信度。低置信度记录默认只允许预览，不能直接写入。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum IngestConfidence {
+    High,
+    Medium,
+    Low,
+}
+
+/// 一条结构化记录在原始材料中的可审计出处。
+///
+/// `kind` 故意保持开放字符串：读取能力可以持续扩展到新的文件格式和云文档，
+/// 而不会迫使 ingest 协议为每种载体升级版本。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceCitation {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub title: String,
+    pub reference: String,
+    pub locator: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_date: Option<NaiveDate>,
+}
+
+/// 随规范、事实和评估结果持久化的导入元数据。
+///
+/// `external_key` 提供跨重复导入的稳定身份，`record_sha256` 用于区分“未变化”与
+/// “同一来源内容已更新”，避免每次导入都生成重复记录。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IngestMetadata {
+    pub external_key: String,
+    pub record_sha256: String,
+    pub source: SourceCitation,
+    pub confidence: IngestConfidence,
+}
 
 /// 合规框架,如 `dengbao-2.0`、`iso27001`。作为 `ControlId` 的命名空间。
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -151,7 +192,9 @@ impl FromStr for ControlStatus {
             "partial" => Ok(Self::Partial),
             "gap" => Ok(Self::Gap),
             "na" => Ok(Self::Na),
-            other => Err(eyre::eyre!("未知控制状态 `{other}`(应为 met/partial/gap/na)")),
+            other => Err(eyre::eyre!(
+                "未知控制状态 `{other}`(应为 met/partial/gap/na)"
+            )),
         }
     }
 }
@@ -246,7 +289,9 @@ impl ProjectFactKind {
             "决策" => Ok(Self::Decision),
             "发现" => Ok(Self::Finding),
             "备注" => Ok(Self::Note),
-            other => Err(eyre::eyre!("未知项目事实类型 `{other}`(应为 整改/例外/决策/发现/备注)")),
+            other => Err(eyre::eyre!(
+                "未知项目事实类型 `{other}`(应为 整改/例外/决策/发现/备注)"
+            )),
         }
     }
 }
@@ -274,7 +319,10 @@ mod tests {
     fn natural_control_cmp_orders_numerically() {
         use std::cmp::Ordering;
         assert_eq!(natural_control_cmp("8.1.1.2", "8.1.1.10"), Ordering::Less);
-        assert_eq!(natural_control_cmp("8.1.1.10", "8.1.1.9"), Ordering::Greater);
+        assert_eq!(
+            natural_control_cmp("8.1.1.10", "8.1.1.9"),
+            Ordering::Greater
+        );
         assert_eq!(natural_control_cmp("8.1.4.1", "8.1.4.1"), Ordering::Equal);
     }
 

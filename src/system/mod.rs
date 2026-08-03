@@ -51,9 +51,5 @@ pub fn run_system(cmd: SystemCommand) -> eyre::Result<()> {
             let slug = resolve_slug(system.as_deref())?;
             fact::find(&slug, &control)
         }
-        SystemCommand::Ingest { system, source } => {
-            let slug = resolve_slug(system.as_deref())?;
-            fact::ingest(&slug, &source)
-        }
     }
 }

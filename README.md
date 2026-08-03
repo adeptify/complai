@@ -90,10 +90,10 @@ Complai 由 Agent 驱动：安装 CLI、安装轻量 discovery skill，然后直
 
 ### 1. 安装 CLI
 
-需要 stable Rust 和 Cargo。当前功能基线是 Complai `0.3.0`：
+需要 stable Rust 和 Cargo。当前功能基线是 Complai `0.4.0`：
 
 ```sh
-cargo install complai --version 0.3.0 --locked
+cargo install complai --version 0.4.0 --locked
 complai --version
 ```
 

@@ -108,10 +108,10 @@ skill, then describe the compliance task you want to complete.
 ### 1. Install the CLI
 
 Stable Rust and Cargo are required. The current feature baseline is Complai
-`0.3.0`:
+`0.4.0`:
 
 ```sh
-cargo install complai --version 0.3.0 --locked
+cargo install complai --version 0.4.0 --locked
 complai --version
 ```
 

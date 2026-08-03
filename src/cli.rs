@@ -206,6 +206,9 @@ pub enum MatrixCommand {
         gap: Option<String>,
         #[arg(long)]
         owner: Option<String>,
+        /// 整改计划或完成情况
+        #[arg(long)]
+        remediation: Option<String>,
     },
     /// 给控制项关联证据/系统事实/项目事实
     Link {

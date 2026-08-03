@@ -276,7 +276,7 @@ fn project_end_to_end_produces_gap_report() {
         "order-platform",
         "架构".into(),
         "微服务拓扑".into(),
-        Some("dengbao-2.0:8.1.2".into()),
+        Some("dengbao-2.0:8.1.2.1".into()),
         "user".into(),
         None,
         Some("三个微服务,经 API 网关接入,mTLS。".into()),
@@ -294,8 +294,10 @@ fn project_end_to_end_produces_gap_report() {
     project::matrix::set(
         "dengbao-2.0:8.1.4.1",
         "gap",
-        Some("payment-service 未启用多因素".into()),
-        Some("张三".into()),
+        project::matrix::MatrixSetOptions::new()
+            .gap("payment-service 未启用多因素")
+            .owner("张三")
+            .remediation("Q3 完成 MFA 接入"),
     )
     .unwrap();
     project::matrix::link(
@@ -312,6 +314,7 @@ fn project_end_to_end_produces_gap_report() {
     assert!(report.contains("缺口 1"));
     assert!(report.contains("身份鉴别"));
     assert!(report.contains("payment-service 未启用多因素"));
+    assert!(report.contains("Q3 完成 MFA 接入"));
     assert!(report.contains("SYS-F-0001"));
 }
 
@@ -329,7 +332,7 @@ fn system_shared_across_projects() {
         "shared-sys",
         "架构".into(),
         "拓扑".into(),
-        Some("dengbao-2.0:8.1.2".into()),
+        Some("dengbao-2.0:8.1.2.1".into()),
         "user".into(),
         None,
         Some("body".into()),
@@ -419,14 +422,6 @@ fn generic_framework_controls_can_be_ingested_and_assessed() {
         std::env::set_var("COMPLAI_PROJECT_DIR", &project_path);
     }
 
-    // 旧版把无内容的 `na` 当初始值；加载时应将这种可明确识别的旧数据
-    // 视为未评估，但不改动有理由的真实 `na`。
-    let matrix_path = project_path.join("matrix.yaml");
-    let legacy_matrix = std::fs::read_to_string(&matrix_path)
-        .expect("初始矩阵应可读取")
-        .replacen("status: unassessed", "status: na", 1);
-    std::fs::write(&matrix_path, legacy_matrix).expect("旧版矩阵测试数据应可写入");
-
     let control: model::ControlId = "iso27001-2022:A.5.1".parse().expect("通用控制 ID 合法");
     let matrix = project::matrix::load(&project_path).expect("矩阵应可加载");
     assert_eq!(matrix.level, None);
@@ -439,7 +434,14 @@ fn generic_framework_controls_can_be_ingested_and_assessed() {
     let initial_report = std::fs::read_to_string(project_path.join("drafts/compliance-report.md"))
         .expect("初始报告应可读取");
     assert!(initial_report.contains("未评估 1"));
-    assert!(project::matrix::set("iso27001-2022:A.5.1", "na", None, None).is_err());
+    assert!(
+        project::matrix::set(
+            "iso27001-2022:A.5.1",
+            "na",
+            project::matrix::MatrixSetOptions::new(),
+        )
+        .is_err()
+    );
     assert!(
         project::matrix::link(
             "iso27001-2022:A.5.1",
@@ -469,8 +471,12 @@ fn generic_framework_controls_can_be_ingested_and_assessed() {
         None,
     )
     .expect("存在的证据应可关联");
-    project::matrix::set("iso27001-2022:A.5.1", "met", None, None)
-        .expect("有支撑的控制应可标记满足");
+    project::matrix::set(
+        "iso27001-2022:A.5.1",
+        "met",
+        project::matrix::MatrixSetOptions::new(),
+    )
+    .expect("有支撑的控制应可标记满足");
 
     reports::report::generate().expect("通用框架报告应可生成");
     let report = std::fs::read_to_string(project_path.join("drafts/compliance-report.md"))
@@ -479,4 +485,317 @@ fn generic_framework_controls_can_be_ingested_and_assessed() {
     assert!(!report.contains("等级:"));
     assert!(report.contains("未评估 0"));
     assert!(report.contains("满足 1"));
+}
+
+#[test]
+#[serial]
+fn system_fact_domains_never_escape_the_system_kb() {
+    let kb_dir = TempDir::new().expect("临时 KB 目录可创建");
+    unsafe {
+        std::env::set_var("COMPLAI_KB_DIR", kb_dir.path());
+        std::env::remove_var("COMPLAI_PROJECT_DIR");
+    }
+    system::init::init("safe-system", "Safe System".to_string()).expect("系统应可初始化");
+
+    system::fact::add(
+        "safe-system",
+        "../manual-outside".to_string(),
+        "Manual fact".to_string(),
+        None,
+        "user".to_string(),
+        None,
+        Some("manual body".to_string()),
+    )
+    .expect("CLI domain 应映射到安全目录");
+
+    let json = r#"{
+      "schema_version": "complai.ingest/v1",
+      "records": [{
+        "kind": "system_fact",
+        "external_key": "path-safety:ingest",
+        "source": {
+          "type": "test",
+          "title": "Path safety",
+          "reference": "test.json",
+          "locator": "record 1"
+        },
+        "confidence": "high",
+        "target": {"system": "safe-system"},
+        "content": {
+          "domain": "../../ingest-outside",
+          "title": "Ingest fact",
+          "body": "ingest body"
+        }
+      }]
+    }"#;
+    let bundle: ingest::IngestBundle = serde_json::from_str(json).expect("路径安全 bundle 应合法");
+    ingest::apply_bundle(
+        &bundle,
+        ingest::ApplyOptions {
+            allow_low_confidence: false,
+        },
+    )
+    .expect("ingest domain 应映射到安全目录");
+
+    let system_dir = system::system_dir("safe-system").expect("系统目录可解析");
+    let index = system::fact::load_index("safe-system").expect("系统索引可加载");
+    assert_eq!(index.facts.len(), 2);
+    assert_eq!(index.facts[0].domain, "../manual-outside");
+    assert_eq!(index.facts[1].domain, "../../ingest-outside");
+    for fact in &index.facts {
+        assert!(!fact.file.contains(".."));
+        assert!(system_dir.join(&fact.file).is_file());
+    }
+    assert!(!kb_dir.path().join("system/manual-outside").exists());
+    assert!(!kb_dir.path().join("ingest-outside").exists());
+}
+
+#[test]
+#[serial]
+fn project_init_requires_a_real_system_nonempty_framework_and_empty_target() {
+    let kb_dir = TempDir::new().expect("临时 KB 目录可创建");
+    unsafe {
+        std::env::set_var("COMPLAI_KB_DIR", kb_dir.path());
+        std::env::remove_var("COMPLAI_PROJECT_DIR");
+    }
+    compliance::scaffold::scaffold("dengbao-2.0").expect("等保框架可初始化");
+
+    let projects = TempDir::new().expect("临时项目父目录可创建");
+    let missing_system_project = projects.path().join("missing-system");
+    assert!(
+        project::init::init(
+            missing_system_project.to_str().expect("项目路径是 UTF-8"),
+            "missing-system",
+            "dengbao-2.0",
+            Some(3),
+        )
+        .is_err()
+    );
+    assert!(!missing_system_project.join("project.yaml").exists());
+    assert!(
+        !system::system_dir("missing-system")
+            .expect("系统目录可解析")
+            .exists()
+    );
+
+    system::init::init("real-system", "Real System".to_string()).expect("系统可初始化");
+    let occupied = projects.path().join("occupied");
+    std::fs::create_dir_all(&occupied).expect("非空目标目录可创建");
+    std::fs::write(occupied.join("keep.txt"), "keep").expect("占位文件可写入");
+    assert!(
+        project::init::init(
+            occupied.to_str().expect("项目路径是 UTF-8"),
+            "real-system",
+            "dengbao-2.0",
+            Some(3),
+        )
+        .is_err()
+    );
+    assert_eq!(
+        std::fs::read_to_string(occupied.join("keep.txt")).expect("占位文件仍可读取"),
+        "keep"
+    );
+
+    let empty_framework = compliance::framework_dir("empty-framework").expect("空框架目录可解析");
+    std::fs::create_dir_all(&empty_framework).expect("空框架目录可创建");
+    assert!(compliance::build::build("empty-framework").is_err());
+    std::fs::write(
+        empty_framework.join("index.yaml"),
+        "framework: empty-framework\ncontrols: []\n",
+    )
+    .expect("空索引测试数据可写入");
+    let empty_project = projects.path().join("empty-framework-project");
+    assert!(
+        project::init::init(
+            empty_project.to_str().expect("项目路径是 UTF-8"),
+            "real-system",
+            "empty-framework",
+            None,
+        )
+        .is_err()
+    );
+    assert!(!empty_project.join("project.yaml").exists());
+}
+
+#[test]
+#[serial]
+fn matrix_links_keep_reverse_indexes_consistent_and_evidence_immutable() {
+    let kb_dir = TempDir::new().expect("临时 KB 目录可创建");
+    unsafe {
+        std::env::set_var("COMPLAI_KB_DIR", kb_dir.path());
+        std::env::remove_var("COMPLAI_PROJECT_DIR");
+    }
+    compliance::scaffold::scaffold("dengbao-2.0").expect("等保框架可初始化");
+    system::init::init("linked-system", "Linked System".to_string()).expect("系统可初始化");
+    let project_parent = TempDir::new().expect("临时项目父目录可创建");
+    let project_path = project_parent.path().join("linked-project");
+    project::init::init(
+        project_path.to_str().expect("项目路径是 UTF-8"),
+        "linked-system",
+        "dengbao-2.0",
+        Some(3),
+    )
+    .expect("项目可初始化");
+    unsafe {
+        std::env::set_var("COMPLAI_PROJECT_DIR", &project_path);
+    }
+
+    system::fact::add(
+        "linked-system",
+        "架构".to_string(),
+        "共享身份服务".to_string(),
+        None,
+        "user".to_string(),
+        None,
+        Some("统一身份服务支撑多个控制。".to_string()),
+    )
+    .expect("无控制系统事实可添加");
+    project::fact::add(
+        "整改".to_string(),
+        "补充认证策略".to_string(),
+        None,
+        Some("等待策略审批。".to_string()),
+    )
+    .expect("无控制项目事实可添加");
+
+    let evidence_source = project_path.join("policy.txt");
+    std::fs::write(&evidence_source, "version one").expect("证据源文件可写入");
+    project::evidence::add(
+        evidence_source.to_str().expect("证据路径是 UTF-8"),
+        "dengbao-2.0:8.1.4.1",
+        "policy-doc".to_string(),
+        None,
+    )
+    .expect("首份证据可登记");
+    std::fs::write(&evidence_source, "version two").expect("证据源文件可更新");
+    project::evidence::add(
+        evidence_source.to_str().expect("证据路径是 UTF-8"),
+        "dengbao-2.0:8.1.4.1",
+        "policy-doc".to_string(),
+        None,
+    )
+    .expect("同名证据可再次登记");
+
+    let evidence_index = project::evidence::load_index(&project_path).expect("证据索引可加载");
+    let first = evidence_index
+        .evidence
+        .get("EV-0001")
+        .expect("首份证据存在");
+    let second = evidence_index
+        .evidence
+        .get("EV-0002")
+        .expect("第二份证据存在");
+    assert_ne!(first.file, second.file);
+    assert_eq!(
+        std::fs::read_to_string(project_path.join(&first.file)).expect("首份证据可读取"),
+        "version one"
+    );
+    assert_eq!(
+        std::fs::read_to_string(project_path.join(&second.file)).expect("第二份证据可读取"),
+        "version two"
+    );
+
+    project::matrix::link(
+        "dengbao-2.0:8.1.4.2",
+        Some("EV-0001".to_string()),
+        Some("SYS-F-0001".to_string()),
+        Some("PROJ-F-0001".to_string()),
+    )
+    .expect("矩阵关联可同步反向索引");
+
+    let target: model::ControlId = "dengbao-2.0:8.1.4.2".parse().expect("目标控制 ID 合法");
+    let evidence_index = project::evidence::load_index(&project_path).expect("证据索引可加载");
+    assert!(
+        evidence_index
+            .evidence
+            .get("EV-0001")
+            .expect("证据存在")
+            .linked_controls
+            .contains(&target)
+    );
+    let system_index = system::fact::load_index("linked-system").expect("系统索引可加载");
+    assert!(system_index.facts[0].related_controls.contains(&target));
+    let project_index = project::fact::load_index(&project_path).expect("项目事实索引可加载");
+    assert_eq!(project_index.facts[0].control.as_ref(), Some(&target));
+
+    let before = project::evidence::load_index(&project_path)
+        .expect("错误登记前证据索引可加载")
+        .evidence
+        .len();
+    assert!(
+        project::evidence::add(
+            evidence_source.to_str().expect("证据路径是 UTF-8"),
+            "dengbao-2.0:missing",
+            "policy-doc".to_string(),
+            None,
+        )
+        .is_err()
+    );
+    assert_eq!(
+        project::evidence::load_index(&project_path)
+            .expect("错误登记后证据索引可加载")
+            .evidence
+            .len(),
+        before
+    );
+}
+
+#[test]
+#[serial]
+fn ingest_rolls_back_all_files_when_final_index_build_fails() {
+    let kb_dir = TempDir::new().expect("临时 KB 目录可创建");
+    unsafe {
+        std::env::set_var("COMPLAI_KB_DIR", kb_dir.path());
+        std::env::remove_var("COMPLAI_PROJECT_DIR");
+    }
+    compliance::scaffold::scaffold("dengbao-2.0").expect("等保框架可初始化");
+    system::init::init("rollback-system", "Rollback System".to_string()).expect("系统可初始化");
+    let framework_dir = compliance::framework_dir("dengbao-2.0").expect("框架目录可解析");
+    let control_path = framework_dir.join("技术/安全计算环境/8.1.4.1.md");
+    let original_control = std::fs::read_to_string(&control_path).expect("原控制文件可读取");
+    std::fs::write(framework_dir.join("malformed.md"), "not frontmatter")
+        .expect("故障注入文件可写入");
+
+    let json = r#"{
+      "schema_version": "complai.ingest/v1",
+      "records": [
+        {
+          "kind": "system_fact",
+          "external_key": "rollback:fact",
+          "source": {"type":"test","title":"Rollback","reference":"test","locator":"1"},
+          "confidence": "high",
+          "target": {"system": "rollback-system"},
+          "content": {"domain":"架构","title":"Should roll back","body":"temporary"}
+        },
+        {
+          "kind": "control_content",
+          "external_key": "rollback:control",
+          "source": {"type":"test","title":"Rollback","reference":"test","locator":"2"},
+          "confidence": "high",
+          "target": {"control": "dengbao-2.0:8.1.4.1"},
+          "content": {"requirement_summary":"Should roll back","completeness":"partial"}
+        }
+      ]
+    }"#;
+    let bundle: ingest::IngestBundle = serde_json::from_str(json).expect("回滚测试 bundle 合法");
+    assert!(
+        ingest::apply_bundle(
+            &bundle,
+            ingest::ApplyOptions {
+                allow_low_confidence: false,
+            },
+        )
+        .is_err()
+    );
+
+    assert!(
+        system::fact::load_index("rollback-system")
+            .expect("回滚后系统索引可加载")
+            .facts
+            .is_empty()
+    );
+    assert_eq!(
+        std::fs::read_to_string(control_path).expect("回滚后控制文件可读取"),
+        original_control
+    );
 }

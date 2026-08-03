@@ -51,7 +51,8 @@ Complai 负责稳定的数据模型、严格的写入边界、来源追踪和确
 
 - **Agent-native：** 工作流随 CLI 内置并按需加载，指令始终与二进制版本一致。
 - **输入格式不限：** 文档读取交给 Agent 和当前可用工具，不要求用户整理专用模板。
-- **写入过程受控：** 所有批量写入必须经过 `schema → validate → plan → apply`。
+- **写入过程受控：** 所有批量写入必须经过 `schema → validate → plan → apply`；
+  原子文件替换、写锁和错误回滚保护正文与索引一致性。
 - **来源可追溯：** 保存来源类型、文档引用、页码/工作表/区块定位、可选 SHA-256、
   文档日期、置信度和稳定 external key。
 - **系统知识可复用：** 同一系统跨框架、跨年度评估时，无需重复维护架构和资产信息。
@@ -213,7 +214,8 @@ complai evidence add mfa-login.png \
 complai matrix link dengbao-2.0:8.1.4.1 --evidence EV-0001
 complai matrix set dengbao-2.0:8.1.4.1 gap \
   --gap "运维登录未启用多因素认证" \
-  --owner "安全负责人"
+  --owner "安全负责人" \
+  --remediation "启用运维 MFA 并复核登录策略"
 
 complai gen report
 ```
@@ -228,7 +230,7 @@ complai gen report
 | 业务系统 KB | 复用架构、资产、数据流和策略事实 | `system init/add/find/show` |
 | 统一 ingest | 严格、可追溯、幂等的 Agent 批量写入 | `ingest schema/validate/plan/apply` |
 | 评估项目 | 绑定一个系统、框架和可选级别 | `project init/show` |
-| 控制矩阵 | 状态、缺口、负责人、事实和证据引用 | `matrix show/set/link/trace` |
+| 控制矩阵 | 状态、缺口、整改、负责人、事实和证据引用 | `matrix show/set/link/trace` |
 | 项目事实 | 发现、整改、例外、决策和备注 | `fact add/find/show` |
 | 证据管理 | 复制、哈希、分类、查询并关联证据 | `evidence add/list/find/show` |
 | 报告生成 | 生成当前合规差距报告 | `gen report` |
@@ -256,20 +258,21 @@ complai skill get doc-ingest
 
 ```text
 ~/.complai/kb/
+├── .complai.lock
 ├── compliance/<framework>/
 │   ├── index.yaml
 │   ├── <framework-specific-path>/<control-id>.md
 │   └── controls/<safe-control-id>.md
 └── system/<slug>/
     ├── index.yaml
-    └── <domain>/SYS-F-NNNN.md
+    └── <safe-domain>/SYS-F-NNNN.md
 
 <project>/
 ├── project.yaml
 ├── matrix.yaml
 ├── facts/
 ├── evidence.yaml
-├── evidence/
+├── evidence/<control>/EV-NNNN-<filename>
 └── drafts/
 ```
 
@@ -297,9 +300,10 @@ git clone https://github.com/adeptify/complai.git
 cd complai
 
 cargo build
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo package --list --allow-dirty
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features --locked
+cargo package --locked
 ```
 
 项目使用 Rust 2024。修改 Agent Skill 分发时还应运行：
@@ -330,6 +334,7 @@ tests/                        单元、集成和快照测试
 - [文件格式与初始化](docs/file-templates.md)
 - [Agent Skill 架构](skills/SKILLS.md)
 - [存储与设计计划](PLAN.md)
+- [发布流程](docs/releasing.md)
 - [JSON ingest schema](schemas/ingest-v1.schema.json)
 
 ## License

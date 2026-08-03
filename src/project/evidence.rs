@@ -90,9 +90,9 @@ pub fn load_index(root: &Path) -> eyre::Result<EvidenceIndex> {
     serde_yml::from_str(&content).wrap_err("解析 evidence.yaml 失败")
 }
 
-fn save_index(root: &Path, index: &EvidenceIndex) -> eyre::Result<()> {
+pub(crate) fn save_index(root: &Path, index: &EvidenceIndex) -> eyre::Result<()> {
     let yaml = serde_yml::to_string(index).wrap_err("序列化证据索引失败")?;
-    fs::write(index_path(root), yaml).wrap_err("写 evidence.yaml 失败")
+    crate::storage::atomic_write(&index_path(root), yaml).wrap_err("写 evidence.yaml 失败")
 }
 
 fn next_evidence_id(index: &EvidenceIndex) -> String {
@@ -111,10 +111,17 @@ pub fn add(
     kind_str: String,
     description: Option<String>,
 ) -> eyre::Result<()> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
     let cid: ControlId = control_str
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
     let root = project_root().wrap_err("定位当前项目失败")?;
+    let matrix = crate::project::matrix::load(&root).wrap_err("加载控制矩阵失败")?;
+    if !matrix.entries.contains_key(&cid) {
+        eyre::bail!("控制 {cid} 不在当前项目矩阵中");
+    }
+    let mut index = load_index(&root).wrap_err("加载证据索引失败")?;
+    let id = next_evidence_id(&index);
 
     let bytes = fs::read(file_path).wrap_err_with(|| format!("读取证据文件 {file_path} 失败"))?;
     let hash = sha2::Sha256::digest(&bytes);
@@ -126,18 +133,11 @@ pub fn add(
         .and_then(|s| s.to_str())
         .ok_or_else(|| eyre::eyre!("证据文件路径无有效文件名:{file_path}"))
         .wrap_err("定位证据文件名失败")?;
-    // 按控制点就近存放;control_id(如 8.1.4.1)无冒号,可直接作子目录。
+    // 证据 ID 进入物理文件名，使相同原始文件名的多次采集各自保留不可变副本。
     let control_directory = crate::paths::safe_path_component(&cid.control_id);
-    let rel = format!("evidence/{control_directory}/{fname}");
+    let safe_filename = crate::paths::safe_path_component(fname);
+    let rel = format!("evidence/{control_directory}/{id}-{safe_filename}");
     let dest = root.join(&rel);
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)
-            .wrap_err_with(|| format!("创建目录 {} 失败", parent.display()))?;
-    }
-    fs::write(&dest, &bytes).wrap_err_with(|| format!("写入证据副本 {} 失败", dest.display()))?;
-
-    let mut index = load_index(&root).wrap_err("加载证据索引失败")?;
-    let id = next_evidence_id(&index);
     let ev = Evidence {
         id: id.clone(),
         file: rel,
@@ -150,10 +150,30 @@ pub fn add(
         linked_facts: Vec::new(),
     };
     index.evidence.insert(id.clone(), ev);
-    save_index(&root, &index).wrap_err("保存证据索引失败")?;
+    crate::storage::transaction(|| {
+        crate::storage::atomic_write(&dest, &bytes)
+            .wrap_err_with(|| format!("写入证据副本 {} 失败", dest.display()))?;
+        save_index(&root, &index).wrap_err("保存证据索引失败")
+    })
+    .wrap_err("登记证据事务失败")?;
 
     println!("added evidence {id} for {control_str}");
     Ok(())
+}
+
+/// 让证据反向索引与矩阵关联保持一致；同一证据可支撑多个控制项。
+pub(crate) fn link_control(root: &Path, id: &str, control: &ControlId) -> eyre::Result<()> {
+    let mut index = load_index(root).wrap_err("加载证据索引失败")?;
+    let evidence = index
+        .evidence
+        .get_mut(id)
+        .ok_or_else(|| eyre::eyre!("证据 {id} 不存在"))
+        .wrap_err("定位证据失败")?;
+    if evidence.linked_controls.contains(control) {
+        return Ok(());
+    }
+    evidence.linked_controls.push(control.clone());
+    save_index(root, &index).wrap_err("保存证据反向关联失败")
 }
 
 pub fn list() -> eyre::Result<()> {

@@ -59,7 +59,8 @@ description: >-
 
    ```sh
    complai matrix set <control> met --owner "<责任人>"
-   complai matrix set <control> <partial|gap|na> --gap "<缺口或不适用理由>" --owner "<责任人>"
+   complai matrix set <control> <partial|gap|na> --gap "<缺口或不适用理由>" \
+     --owner "<责任人>" --remediation "<整改计划或完成情况>"
    ```
 
 6. **产出报告**：运行 `complai gen report`，生成

@@ -4,7 +4,7 @@
 //! 正文由人工摘录填充。已存在的文件不会被覆盖,以免破坏手工编辑。
 
 use std::collections::BTreeMap;
-use std::fs;
+use std::collections::HashSet;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -36,14 +36,22 @@ struct DomainStructure {
 struct CategoryStructure {
     prefix: String,
     name: String,
-    points: Vec<String>,
+    points: Vec<PointStructure>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PointStructure {
+    id: String,
+    name: String,
 }
 
 pub fn scaffold(framework: &str) -> eyre::Result<()> {
-    match framework {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
+    crate::storage::transaction(|| match framework {
         "dengbao-2.0" => scaffold_dengbao(),
         other => eyre::bail!("未知框架 `{other}`:MVP 仅支持 scaffold `dengbao-2.0`"),
-    }
+    })
+    .wrap_err("生成框架控制库事务失败")
 }
 
 fn scaffold_dengbao() -> eyre::Result<()> {
@@ -52,13 +60,20 @@ fn scaffold_dengbao() -> eyre::Result<()> {
     let dir = framework_dir(&structure.framework).wrap_err("解析合规框架目录失败")?;
     let mut created = 0usize;
     let mut skipped = 0usize;
+    let mut control_ids = HashSet::new();
 
     for domain in &structure.domains {
         let domain_enum = Domain::from_str(&domain.key)
             .wrap_err_with(|| format!("解析控制域 `{}` 失败", domain.key))?;
         for category in &domain.categories {
-            for (i, point) in category.points.iter().enumerate() {
-                let control_id = format!("{}.{}", category.prefix, i + 1);
+            for point in &category.points {
+                let control_id = point.id.clone();
+                if !control_id.starts_with(&format!("{}.", category.prefix)) {
+                    eyre::bail!("控制 ID {control_id} 不属于类别前缀 {}", category.prefix);
+                }
+                if !control_ids.insert(control_id.clone()) {
+                    eyre::bail!("等保结构表存在重复控制 ID {control_id}");
+                }
                 let rel = Path::new(&domain.key)
                     .join(&category.name)
                     .join(format!("{control_id}.md"));
@@ -76,7 +91,7 @@ fn scaffold_dengbao() -> eyre::Result<()> {
                     domain: domain_enum.clone(),
                     category: category.name.clone(),
                     control_id,
-                    title: point.clone(),
+                    title: point.name.clone(),
                     levels: vec![structure.level],
                     tags: Vec::new(),
                     mappings: BTreeMap::new(),
@@ -85,15 +100,15 @@ fn scaffold_dengbao() -> eyre::Result<()> {
                     last_reviewed: None,
                     ingest: None,
                 };
-                let body = default_body(point);
+                let body = default_body(&point.name);
                 let content =
                     frontmatter::serialize(&fm, &body).wrap_err("序列化控制桩文件失败")?;
 
                 if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent)
+                    crate::storage::create_dir_all(parent)
                         .wrap_err_with(|| format!("创建目录 {} 失败", parent.display()))?;
                 }
-                fs::write(&path, content)
+                crate::storage::atomic_write(&path, content)
                     .wrap_err_with(|| format!("写入 {} 失败", path.display()))?;
                 created += 1;
             }
@@ -101,7 +116,8 @@ fn scaffold_dengbao() -> eyre::Result<()> {
     }
 
     // 生成桩文件后立即构建索引,使 `compliance list`/`compliance show` 可用。
-    crate::compliance::build::build(&structure.framework).wrap_err("构建等保框架索引失败")?;
+    crate::compliance::build::build_unlocked(&structure.framework)
+        .wrap_err("构建等保框架索引失败")?;
 
     println!(
         "scaffolded {created} controls ({skipped} already existed) for {} into {}",

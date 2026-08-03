@@ -1,13 +1,13 @@
 [package]
 name = "complai"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "Compliance audit CLI and agent skills for gap analysis, evidence collection, and reporting"
 license = "MIT"
 repository = "https://github.com/adeptify/complai"
 homepage = "https://github.com/adeptify/complai"
 readme = "README.md"
-keywords = ["compliance", "audit", "security", "cli", "dengbao"]
+keywords = ["compliance", "audit", "security", "cli", "governance"]
 categories = ["command-line-utilities"]
 include = [
     "src/**",
@@ -21,6 +21,7 @@ include = [
     "Cargo.toml",
     "Cargo.lock",
     "README.md",
+    "README.en.md",
     "PLAN.md",
     "LICENSE",
 ]
@@ -29,13 +30,14 @@ include = [
 chrono = { version = "0.4.45", features = ["serde"] }
 clap = { version = "4.6.4", features = ["derive"] }
 eyre = "0.6.12"
+fs2 = "0.4.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 serde_yml = "0.0.13"
 sha2 = "0.11.0"
+tempfile = "3.27.0"
 walkdir = "2.5.0"
 
 [dev-dependencies]
 insta = "1.48.0"
 serial_test = "4.0.1"
-tempfile = "3.27.0"

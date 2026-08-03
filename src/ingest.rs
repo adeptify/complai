@@ -371,6 +371,7 @@ pub fn plan_bundle(bundle: &IngestBundle) -> eyre::Result<Vec<PlanItem>> {
 
 /// 校验完整计划后应用 bundle；同一 external_key 和内容摘要会被幂等跳过。
 pub fn apply_bundle(bundle: &IngestBundle, options: ApplyOptions) -> eyre::Result<Vec<PlanItem>> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
     let plan = plan_bundle(bundle).wrap_err("预检 ingest bundle 失败")?;
     if !options.allow_low_confidence {
         let low_confidence = bundle
@@ -388,39 +389,43 @@ pub fn apply_bundle(bundle: &IngestBundle, options: ApplyOptions) -> eyre::Resul
         }
     }
 
-    let mut changed_frameworks = BTreeSet::new();
-    for (record, item) in bundle.records.iter().zip(&plan) {
-        if item.action == PlanAction::Unchanged {
-            continue;
-        }
-        let metadata = record.metadata().wrap_err("计算 ingest 持久化元数据失败")?;
-        match record {
-            IngestRecord::ControlContent {
-                target, content, ..
-            } => {
-                apply_control_content(&target.control, content, metadata)
-                    .wrap_err_with(|| format!("写入控制 {} 失败", target.control))?;
-                changed_frameworks.insert(target.control.framework.as_str().to_string());
+    crate::storage::transaction(|| {
+        let mut changed_frameworks = BTreeSet::new();
+        for (record, item) in bundle.records.iter().zip(&plan) {
+            if item.action == PlanAction::Unchanged {
+                continue;
             }
-            IngestRecord::SystemFact {
-                target, content, ..
-            } => apply_system_fact(&target.system, content, metadata)
-                .wrap_err_with(|| format!("写入系统 '{}' 事实失败", target.system))?,
-            IngestRecord::ProjectFact {
-                target, content, ..
-            } => apply_project_fact(&target.project, content, metadata)
-                .wrap_err_with(|| format!("写入项目 '{}' 事实失败", target.project))?,
-            IngestRecord::MatrixAssessment {
-                target, content, ..
-            } => apply_matrix_assessment(target, content, metadata)
-                .wrap_err_with(|| format!("写入矩阵控制 {} 失败", target.control))?,
+            let metadata = record.metadata().wrap_err("计算 ingest 持久化元数据失败")?;
+            match record {
+                IngestRecord::ControlContent {
+                    target, content, ..
+                } => {
+                    apply_control_content(&target.control, content, metadata)
+                        .wrap_err_with(|| format!("写入控制 {} 失败", target.control))?;
+                    changed_frameworks.insert(target.control.framework.as_str().to_string());
+                }
+                IngestRecord::SystemFact {
+                    target, content, ..
+                } => apply_system_fact(&target.system, content, metadata)
+                    .wrap_err_with(|| format!("写入系统 '{}' 事实失败", target.system))?,
+                IngestRecord::ProjectFact {
+                    target, content, ..
+                } => apply_project_fact(&target.project, content, metadata)
+                    .wrap_err_with(|| format!("写入项目 '{}' 事实失败", target.project))?,
+                IngestRecord::MatrixAssessment {
+                    target, content, ..
+                } => apply_matrix_assessment(target, content, metadata)
+                    .wrap_err_with(|| format!("写入矩阵控制 {} 失败", target.control))?,
+            }
         }
-    }
 
-    for framework in changed_frameworks {
-        crate::compliance::build::build(&framework)
-            .wrap_err_with(|| format!("重建框架 '{framework}' 索引失败"))?;
-    }
+        for framework in changed_frameworks {
+            crate::compliance::build::build_unlocked(&framework)
+                .wrap_err_with(|| format!("重建框架 '{framework}' 索引失败"))?;
+        }
+        Ok(())
+    })
+    .wrap_err("应用 ingest 存储事务失败")?;
     print_plan(&plan);
     Ok(plan)
 }
@@ -698,7 +703,8 @@ fn load_control_if_exists(
     let Some(entry) = index.controls.iter().find(|entry| entry.id == *control) else {
         return Ok(None);
     };
-    let path = framework_dir.join(&entry.file);
+    let path = crate::paths::join_stored_path(&framework_dir, &entry.file)
+        .wrap_err("解析控制存储路径失败")?;
     let content = fs::read_to_string(&path)
         .wrap_err_with(|| format!("读取控制文件 {} 失败", path.display()))?;
     let document = frontmatter::parse::<ControlFrontmatter>(&content)
@@ -722,9 +728,10 @@ fn plan_system_fact(system: &str, metadata: &IngestMetadata) -> eyre::Result<Pla
     else {
         return Ok(PlanAction::Create);
     };
-    let path = crate::system::system_dir(system)
-        .wrap_err_with(|| format!("解析系统 '{system}' 目录失败"))?
-        .join(&entry.file);
+    let system_dir = crate::system::system_dir(system)
+        .wrap_err_with(|| format!("解析系统 '{system}' 目录失败"))?;
+    let path = crate::paths::join_stored_path(&system_dir, &entry.file)
+        .wrap_err("解析系统事实存储路径失败")?;
     let content = fs::read_to_string(&path)
         .wrap_err_with(|| format!("读取系统事实 {} 失败", path.display()))?;
     let document = frontmatter::parse::<FactFrontmatter>(&content)
@@ -754,7 +761,8 @@ fn plan_project_fact(project: &str, metadata: &IngestMetadata) -> eyre::Result<P
     else {
         return Ok(PlanAction::Create);
     };
-    let path = root.join("facts").join(&entry.file);
+    let path = crate::paths::join_stored_path(&root.join("facts"), &entry.file)
+        .wrap_err("解析项目事实存储路径失败")?;
     let content = fs::read_to_string(&path)
         .wrap_err_with(|| format!("读取项目事实 {} 失败", path.display()))?;
     let document = frontmatter::parse::<ProjectFactFrontmatter>(&content)
@@ -796,7 +804,7 @@ fn apply_control_content(
                 let directory = crate::compliance::framework_dir(control.framework.as_str())
                     .wrap_err("解析框架目录失败")?
                     .join("controls");
-                fs::create_dir_all(&directory)
+                crate::storage::create_dir_all(&directory)
                     .wrap_err_with(|| format!("创建控制目录 {} 失败", directory.display()))?;
                 let path = directory.join(format!(
                     "{}.md",
@@ -871,7 +879,8 @@ fn apply_control_content(
     }
     let serialized =
         frontmatter::serialize(&document.data, &body).wrap_err("序列化控制内容失败")?;
-    fs::write(&path, serialized).wrap_err_with(|| format!("写控制文件 {} 失败", path.display()))
+    crate::storage::atomic_write(&path, serialized)
+        .wrap_err_with(|| format!("写控制文件 {} 失败", path.display()))
 }
 
 fn apply_system_fact(
@@ -918,26 +927,25 @@ fn apply_system_fact(
     let body = format!("# {}\n\n{}\n", content.title, content.body.trim());
     let serialized =
         frontmatter::serialize(&fact_frontmatter, &body).wrap_err("序列化系统事实失败")?;
-    let relative_path = format!("{}/{id}.md", content.domain);
+    // 保留 domain 原值用于查询和展示，只将安全映射用于物理路径。
+    let domain_directory = crate::paths::safe_path_component(&content.domain);
+    let relative_path = format!("{domain_directory}/{id}.md");
     let system_dir = crate::system::system_dir(system)
         .wrap_err_with(|| format!("解析系统 '{system}' 目录失败"))?;
     let path = system_dir.join(&relative_path);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
+        crate::storage::create_dir_all(parent)
             .wrap_err_with(|| format!("创建系统事实目录 {} 失败", parent.display()))?;
     }
+    let previous_path = match existing_position {
+        Some(position) => Some(
+            crate::paths::join_stored_path(&system_dir, &index.facts[position].file)
+                .wrap_err("解析原系统事实存储路径失败")?,
+        ),
+        None => None,
+    };
     if let Some(position) = existing_position {
-        let old_path = system_dir.join(&index.facts[position].file);
-        if old_path != path && old_path.exists() {
-            fs::rename(&old_path, &path).wrap_err_with(|| {
-                format!(
-                    "移动系统事实 {} 到 {} 失败",
-                    old_path.display(),
-                    path.display()
-                )
-            })?;
-        }
-        fs::write(&path, serialized)
+        crate::storage::atomic_write(&path, serialized)
             .wrap_err_with(|| format!("更新系统事实 {} 失败", path.display()))?;
         index.facts[position] = FactIndexEntry {
             id,
@@ -949,7 +957,7 @@ fn apply_system_fact(
             file: relative_path,
         };
     } else {
-        fs::write(&path, serialized)
+        crate::storage::atomic_write(&path, serialized)
             .wrap_err_with(|| format!("创建系统事实 {} 失败", path.display()))?;
         index.facts.push(FactIndexEntry {
             id,
@@ -961,7 +969,13 @@ fn apply_system_fact(
             file: relative_path,
         });
     }
-    save_system_index(system, &index).wrap_err("保存系统事实索引失败")
+    save_system_index(system, &index).wrap_err("保存系统事实索引失败")?;
+    if let Some(previous_path) = previous_path
+        && previous_path != path
+    {
+        crate::storage::remove_file_if_exists(&previous_path).wrap_err("清理旧系统事实文件失败")?;
+    }
+    Ok(())
 }
 
 fn apply_project_fact(
@@ -997,21 +1011,19 @@ fn apply_project_fact(
     let relative_path = format!("{}/{id}.md", content.kind.as_str());
     let path = root.join("facts").join(&relative_path);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
+        crate::storage::create_dir_all(parent)
             .wrap_err_with(|| format!("创建项目事实目录 {} 失败", parent.display()))?;
     }
+    let facts_dir = root.join("facts");
+    let previous_path = match existing_position {
+        Some(position) => Some(
+            crate::paths::join_stored_path(&facts_dir, &index.facts[position].file)
+                .wrap_err("解析原项目事实存储路径失败")?,
+        ),
+        None => None,
+    };
     if let Some(position) = existing_position {
-        let old_path = root.join("facts").join(&index.facts[position].file);
-        if old_path != path && old_path.exists() {
-            fs::rename(&old_path, &path).wrap_err_with(|| {
-                format!(
-                    "移动项目事实 {} 到 {} 失败",
-                    old_path.display(),
-                    path.display()
-                )
-            })?;
-        }
-        fs::write(&path, serialized)
+        crate::storage::atomic_write(&path, serialized)
             .wrap_err_with(|| format!("更新项目事实 {} 失败", path.display()))?;
         index.facts[position] = ProjectFactIndexEntry {
             id,
@@ -1022,7 +1034,7 @@ fn apply_project_fact(
             file: relative_path,
         };
     } else {
-        fs::write(&path, serialized)
+        crate::storage::atomic_write(&path, serialized)
             .wrap_err_with(|| format!("创建项目事实 {} 失败", path.display()))?;
         index.facts.push(ProjectFactIndexEntry {
             id,
@@ -1033,7 +1045,13 @@ fn apply_project_fact(
             file: relative_path,
         });
     }
-    save_project_fact_index(&root, &index).wrap_err("保存项目事实索引失败")
+    save_project_fact_index(&root, &index).wrap_err("保存项目事实索引失败")?;
+    if let Some(previous_path) = previous_path
+        && previous_path != path
+    {
+        crate::storage::remove_file_if_exists(&previous_path).wrap_err("清理旧项目事实文件失败")?;
+    }
+    Ok(())
 }
 
 fn apply_matrix_assessment(
@@ -1099,7 +1117,8 @@ fn save_system_index(system: &str, index: &crate::system::fact::FactIndex) -> ey
     let path = crate::system::system_dir(system)
         .wrap_err_with(|| format!("解析系统 '{system}' 目录失败"))?
         .join("index.yaml");
-    fs::write(&path, yaml).wrap_err_with(|| format!("写系统事实索引 {} 失败", path.display()))
+    crate::storage::atomic_write(&path, yaml)
+        .wrap_err_with(|| format!("写系统事实索引 {} 失败", path.display()))
 }
 
 fn save_project_fact_index(
@@ -1108,7 +1127,8 @@ fn save_project_fact_index(
 ) -> eyre::Result<()> {
     let yaml = serde_yml::to_string(index).wrap_err("序列化项目事实索引失败")?;
     let path = root.join("facts").join("index.yaml");
-    fs::write(&path, yaml).wrap_err_with(|| format!("写项目事实索引 {} 失败", path.display()))
+    crate::storage::atomic_write(&path, yaml)
+        .wrap_err_with(|| format!("写项目事实索引 {} 失败", path.display()))
 }
 
 fn fact_source_type(kind: &str) -> FactSourceType {

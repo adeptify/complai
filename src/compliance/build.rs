@@ -13,6 +13,12 @@ use crate::frontmatter;
 use crate::model::Framework;
 
 pub fn build(framework: &str) -> eyre::Result<()> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
+    build_unlocked(framework)
+}
+
+/// 调用者已经持有全局写锁时重建索引，避免 scaffold/ingest 重复获取同一文件锁。
+pub(crate) fn build_unlocked(framework: &str) -> eyre::Result<()> {
     let dir = framework_dir(framework).wrap_err("解析合规框架目录失败")?;
     if !dir.exists() {
         eyre::bail!(
@@ -81,6 +87,9 @@ pub fn build(framework: &str) -> eyre::Result<()> {
     }
 
     entries.sort_by(|a, b| crate::model::natural_control_cmp(&a.id.control_id, &b.id.control_id));
+    if entries.is_empty() {
+        eyre::bail!("框架 {framework} 没有可索引的控制项 Markdown 文件");
+    }
 
     let index = ControlIndex {
         framework: Framework(framework.to_string()),
@@ -88,7 +97,7 @@ pub fn build(framework: &str) -> eyre::Result<()> {
     };
     let index_yaml = serde_yml::to_string(&index).wrap_err("序列化索引失败")?;
     let index_path = dir.join("index.yaml");
-    fs::write(&index_path, index_yaml)
+    crate::storage::atomic_write(&index_path, index_yaml)
         .wrap_err_with(|| format!("写入 {} 失败", index_path.display()))?;
 
     println!(

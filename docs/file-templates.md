@@ -28,7 +28,7 @@
 ```
 order-platform-dengbao3/            # 项目根
 ├── project.yaml                    # 引用:system(slug)+ framework + level
-├── matrix.yaml                     # 控制矩阵(init 预填全部控制为 na)
+├── matrix.yaml                     # 控制矩阵(init 预填全部控制为 unassessed)
 ├── facts/                          # 项目专属事实(整改/例外/决策/发现/备注)
 │   ├── index.yaml
 │   └── 整改|例外|.../PROJ-F-NNNN.md
@@ -117,7 +117,7 @@ source:
   collector: agent
 confidence: high
 related_controls:
-  - "dengbao-2.0:8.1.2"
+  - "dengbao-2.0:8.1.2.1"
 status: current
 ---
 
@@ -134,7 +134,7 @@ facts:
   - id: SYS-F-0001
     domain: 架构
     title: 微服务拓扑
-    related_controls: ["dengbao-2.0:8.1.2"]
+    related_controls: ["dengbao-2.0:8.1.2.1"]
     external_key: assessment-v2:p12:architecture
     file: 架构/SYS-F-0001.md
 ```
@@ -200,7 +200,7 @@ created_at: 2026-07-29
 evidence:
   EV-0001:
     id: EV-0001
-    file: evidence/8.1.4.1/sample-mfa.txt
+    file: evidence/8.1.4.1/EV-0001-sample-mfa.txt
     sha256: 908245005d48ab...
     type: config
     description: user-service MFA config
@@ -229,7 +229,7 @@ evidence:
 
 ```sh
 complai system init order-platform --name 订单平台
-complai system add --system order-platform --domain 架构 --title "微服务拓扑" --control dengbao-2.0:8.1.2 --body "..."
+complai system add --system order-platform --domain 架构 --title "微服务拓扑" --control dengbao-2.0:8.1.2.1 --body "..."
 ```
 
 少量人工事实可用 `system add`；从文档批量抽取的事实使用统一 ingest bundle。
@@ -253,4 +253,5 @@ cd order-platform-dengbao3
 
 - `index.yaml`/`matrix.yaml`/`evidence.yaml` 是 CLI 管理的内部存储，不应作为导入接口手编。
 - Agent 批量写入前必须先运行 `ingest validate` 和 `ingest plan`。
+- CLI 使用原子文件替换、全局写锁和 ingest 错误回滚保护多文件状态一致性。
 - 等保结构表(`data/dengbao-2.0.yaml`)的控制点编号/短名正式使用前请核对。

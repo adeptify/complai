@@ -3,6 +3,7 @@
 //! `list` 只读紧凑索引(ID + 标题 + 域),`show` 再按需加载单个控制正文。
 
 use std::fs;
+use std::path::Path;
 use std::str::FromStr;
 
 use eyre::WrapErr;
@@ -40,29 +41,37 @@ pub fn show(id_str: &str) -> eyre::Result<()> {
         .ok_or_else(|| eyre::eyre!("控制 {id} 不在索引中"))
         .wrap_err("定位控制失败")?;
 
-    let content = fs::read_to_string(dir.join(&entry.file))
-        .wrap_err_with(|| format!("读取 {} 失败", entry.file))?;
+    let path =
+        crate::paths::join_stored_path(&dir, &entry.file).wrap_err("解析控制正文存储路径失败")?;
+    let content = fs::read_to_string(path).wrap_err_with(|| format!("读取 {} 失败", entry.file))?;
     println!("{content}");
+    Ok(())
+}
+
+/// 验证控制 ID 已存在于对应框架索引，供手工事实写入避免产生悬空引用。
+pub(crate) fn ensure_control_exists(id: &ControlId) -> eyre::Result<()> {
+    let framework = id.framework.as_str();
+    let index =
+        load_index(framework).wrap_err_with(|| format!("加载控制 {id} 所属框架索引失败"))?;
+    if !index.controls.iter().any(|entry| entry.id == *id) {
+        eyre::bail!("控制 {id} 不存在于框架索引");
+    }
     Ok(())
 }
 
 pub fn list(framework: Option<&str>, domain: Option<&str>) -> eyre::Result<()> {
     let root = kb_root().wrap_err("解析知识库根目录失败")?;
-    if !root.exists() {
+    let compliance_root = root.join("compliance");
+    if !compliance_root.exists() {
         eyre::bail!(
-            "知识库根目录不存在:{}(先通过 ingest 导入框架；等保 2.0 也可运行 `complai compliance scaffold dengbao-2.0`)",
-            root.display()
+            "合规知识库目录不存在:{}(先通过 ingest 导入框架；等保 2.0 也可运行 `complai compliance scaffold dengbao-2.0`)",
+            compliance_root.display()
         );
     }
 
     let frameworks: Vec<String> = match framework {
         Some(f) => vec![f.to_string()],
-        None => fs::read_dir(&root)
-            .wrap_err("读取知识库根目录失败")?
-            .filter_map(Result::ok)
-            .filter(|e| e.path().is_dir())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect(),
+        None => discover_frameworks(&compliance_root).wrap_err("枚举合规框架失败")?,
     };
 
     let domain_filter = match domain {
@@ -99,4 +108,40 @@ pub fn list(framework: Option<&str>, domain: Option<&str>) -> eyre::Result<()> {
     }
     println!("\n{total} controls");
     Ok(())
+}
+
+fn discover_frameworks(compliance_root: &Path) -> eyre::Result<Vec<String>> {
+    let entries = fs::read_dir(compliance_root)
+        .wrap_err_with(|| format!("读取合规知识库目录 {} 失败", compliance_root.display()))?;
+    let mut frameworks = Vec::new();
+    for entry in entries {
+        let entry = entry.wrap_err("读取合规知识库目录项失败")?;
+        if entry
+            .file_type()
+            .wrap_err("读取合规知识库目录项类型失败")?
+            .is_dir()
+        {
+            frameworks.push(entry.file_name().to_string_lossy().into_owned());
+        }
+    }
+    frameworks.sort();
+    Ok(frameworks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::discover_frameworks;
+
+    #[test]
+    fn framework_discovery_stays_inside_the_compliance_directory() {
+        let root = tempfile::TempDir::new().expect("临时知识库可创建");
+        let compliance = root.path().join("compliance");
+        std::fs::create_dir_all(compliance.join("iso27001-2022")).expect("框架目录可创建");
+        std::fs::create_dir_all(root.path().join("system/order-platform")).expect("系统目录可创建");
+
+        assert_eq!(
+            discover_frameworks(&compliance).expect("框架可枚举"),
+            vec!["iso27001-2022"]
+        );
+    }
 }

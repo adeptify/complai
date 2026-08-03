@@ -1,110 +1,86 @@
-# complai 重构:系统知识共享化 + 项目专属事实
+# Complai 当前架构与 Roadmap
 
-## 目标
-把系统知识从「项目私有」提升为「共享 KB」(跨框架/跨年度复用:同一系统今年过等保、明年过 ISO,架构/数据流/资产是同一份)。项目变为「系统 × 框架绑定 + artifacts + 项目专属事实」。共享 KB 分 `compliance` + `system` 两部分。
+## 产品目标
 
-## 新存储布局
+Complai 是供 AI Agent 调用的本地合规工程 CLI。它不限定合规框架，也不负责读取
+特定文档格式；Agent 负责理解用户有权使用的材料，Complai 负责把结构化结果安全、
+可追溯地写入框架知识库、系统知识库和评估项目。
 
+核心模型：
+
+```text
+一个项目 = 一个系统 × 一个合规框架 × 一次评估范围
 ```
-$COMPLAI_KB_DIR (默认 ~/.complai/kb)/
-├── compliance/<framework>/                  # 原 kb/<framework>/ 迁移到这
+
+## 当前存储模型
+
+```text
+$COMPLAI_KB_DIR/                         # 默认 ~/.complai/kb
+├── .complai.lock                        # 所有写操作的跨进程锁
+├── compliance/<framework>/
 │   ├── index.yaml
-│   └── 技术|管理/<category>/<id>.md
-└── system/<slug>/                           # 新:共享业务系统知识
-    ├── index.yaml                           # display_name + facts 索引
-    └── <domain>/SYS-F-NNNN.md               # 架构/部署/资产/...
+│   └── controls-or-framework-layout/
+└── system/<slug>/
+    ├── index.yaml
+    └── <safe-domain>/SYS-F-NNNN.md
 
-projects/<name>/
-├── project.yaml        # name + system(引用) + framework(引用) + level
-├── matrix.yaml         # entries 各加 project_facts 字段
-├── facts/              # 新:项目专属事实(整改/例外/决策/发现/备注)
-│   ├── index.yaml
-│   └── <kind>/PROJ-F-NNNN.md
-├── evidence.yaml + evidence/                # 不变(项目特有)
-└── drafts/                                  # 不变(报告等 artifacts)
+<project>/
+├── project.yaml                         # system + framework + optional level
+├── matrix.yaml                          # 状态与事实/证据引用
+├── facts/index.yaml
+├── facts/<kind>/PROJ-F-NNNN.md
+├── evidence.yaml
+├── evidence/<control>/<evidence-id>-<filename>
+└── drafts/compliance-report.md
 ```
 
-`project.yaml`:
-```yaml
-name: order-platform-dengbao3-2026
-system: order-platform        # 引用共享 system KB(slug)
-framework: dengbao-2.0        # 引用共享 compliance KB
-level: 3
-```
+框架控制域、类别和级别均由框架定义。等保 2.0 三级可通过内置结构表 scaffold；
+ISO、NIST、SOC 2、PCI DSS 等其他框架通过统一 ingest 协议创建控制项。
 
-## 数据模型变更
+## 当前写入不变式
 
-- `FactIndex`(system)+ `display_name: Option<String>`;slug 隐式为目录名。
-- `ProjectMeta` + `system: String`(slug 引用)。
-- `MatrixEntry` + `project_facts: Vec<String>`(PROJ-F 引用);`facts` 仍为 SYS-F(系统事实)。
-- 新 `ProjectFact` schema:frontmatter `{ id, kind, title, tags, control: Option<ControlId>, status, created_at }` + body;`kind` 枚举 `整改/例外/决策/发现/备注`(serde 中文 rename,兼作子目录名)。`ProjectFactIndex` + entries。
-- system slug:ASCII(字母/数字/连字符),作目录名与 project.yaml 引用值;中文显示名存 system index.yaml。
+- 所有外部标识在用于物理路径前转换为安全、稳定的路径段。
+- 索引中保存的相对路径在读取时重新验证，不能逃出所属根目录。
+- 所有状态文件使用同目录临时文件完成原子替换。
+- 写命令通过 KB 根目录文件锁串行化，避免 ID 分配和索引更新竞争。
+- ingest 在完整 plan 通过后执行；普通错误会回滚本 bundle 已写文件。
+- 等保结构表显式保存控制 ID，重排 YAML 不改变控制身份。
+- 矩阵、证据和事实的控制关联在同一事务中同步。
+- 项目矩阵初始状态为 `unassessed`；`partial`、`gap` 和 `na` 必须提供理由。
 
-## 命令变更
+## 主要命令面
 
-### `compliance`(compliance KB)- 路径加一层 `compliance/`
-- `compliance scaffold/build/show/list` -> 操作 `compliance/<framework>/`。
-- 新增 `compliance_root() = kb_root/compliance/`;原 `framework_dir` 改名 `compliance_dir`。
+- `compliance scaffold/build/list/show`：管理共享框架控制库。
+- `system init/add/find/show`：管理跨项目复用的系统事实。
+- `project init/show`：绑定已存在的系统与非空框架。
+- `fact add/find/show`：管理项目专属发现、整改、例外、决策和备注。
+- `evidence add/list/find/show`：登记不可变证据副本。
+- `matrix show/set/link/trace`：维护评估状态与可追溯关系。
+- `ingest schema/validate/plan/apply`：执行版本化、幂等的 Agent 批量写入。
+- `gen report`：生成当前项目的 Markdown 合规差距报告。
 
-### `system`(共享 system KB,从项目迁出)
-- 新 `system init <slug> --name "<display>"` -> 建 `system/<slug>/index.yaml`(display_name + 空 facts)。
-- `system add --domain --title [--control] [--type] [--ref] [--body]` -> 写 `system/<slug>/`。**slug 默认取当前 project.yaml 的 system 字段**,或 `--system <slug>` 显式指定。
-- `system show <id>` / `system find --control <id>` -> 同上,slug 默认项目引用。
-- 新 `system_root() = kb_root/system/`、`system_dir(slug)`;`system_current_slug()` 从项目读 system 引用。
+## 后续 Roadmap
 
-### `project`
-- `project init <name> --system <slug> --framework <f> [--level <l>]` -> 写 project.yaml(含 system 引用);若 `system/<slug>` 不存在则建(display_name=slug,提示可用 `system init` 改名);从 compliance KB 索引以 `unassessed` 预填矩阵。
-- `project show` -> 输出当前项目的系统、框架和可选级别，供 Agent 通用路由。
+### KB 版本与团队协作
 
-### `fact`(项目专属事实,新命令组)
-- `fact add --kind <整改|例外|决策|发现|备注> --title <t> [--control <id>] [--body <text>]` -> `facts/<kind>/PROJ-F-NNNN.md`。
-- `fact show <id>` / `fact find --control <id>`。
+为 framework KB 和 system KB 定义不可变版本标识，并在 `project.yaml` 中钉住所用
+版本，使历史矩阵与报告可以复现。团队共享方案需要同时设计发布、拉取、冲突处理和
+控制 ID 退役规则。
 
-### `matrix`
-- `matrix link <control> [--evidence <id>] [--fact <id>] [--project-fact <id>]` -> `--fact`=SYS-F(系统),`--project-fact`=PROJ-F。
-- `matrix trace <control>` -> 控制正文(compliance KB)+ 系统事实(共享 system KB,按项目 system 引用)+ 项目事实(项目 `facts/`)+ 证据(项目)+ 矩阵状态。
-- `matrix show/set` -> 基本不变(show 多显示 project_facts 计数)。
+### 更强的崩溃恢复
 
-### `evidence`
-- `evidence list/show/find --control` -> 发现和核对已登记证据，再由 `matrix link` 关联。
+当前单文件不会截断，普通运行时错误会回滚 ingest；进程或机器在多文件提交中途崩溃
+时仍可能留下已完成的原子更新。后续可增加落盘事务日志，在下次启动时自动完成提交
+或回滚。
 
-### `ingest`(统一 Agent 写入协议)
-- `ingest schema` 输出版本化 JSON Schema。
-- `ingest validate/plan/apply --from <bundle.json>` 统一写入控制内容、系统事实、
-  项目事实和矩阵评估；保存来源定位与置信度，并按 `external_key` 幂等 upsert。
-- 新框架的 `control_content` 携带 title/domain/category 时创建控制项和索引。
-- 原始 Excel、PDF、Word、图片和云文档由 Agent 使用当前环境的读取能力处理，
-  CLI 不再提供格式专用 `parse` 或目标专用批量 ingest 命令。
+### 事实演化与复用
 
-## 模块/代码变更
+补齐系统事实 `supersedes` 的版本链和过期策略，并评估项目事实是否需要从单控制扩展
+为多控制关系。证据继续保持项目级，跨项目复用需要先定义访问边界与失效规则。
 
-- `src/kb/mod.rs`:加 `compliance_root()`/`compliance_dir()`;`framework_dir` -> `compliance_dir`。
-- `src/compliance/{scaffold,build,query,control}.rs`:操作 `compliance/`。
-- 新 `src/system/` 模块(`mod.rs` + `fact.rs` + `init.rs`):共享 Fact schema 与
-  add/show/find；批量写入统一收敛到 `src/ingest.rs`。
-- `src/project/system.rs` 删除(fact 逻辑迁到 `src/system/`)。
-- `src/project/{mod,init}.rs`:init 加 `--system`;project 不再建 `system/`;改建 `facts/` 空索引。
-- 新 `src/project/fact.rs`:ProjectFact schema + add/show/find(项目专属)。
-- `src/project/matrix.rs`:`MatrixEntry` + `project_facts`;`link` 加 `--project-fact`;`trace` 跨三层(compliance + system + project facts + evidence)拉取。
-- `src/cli.rs` + `src/main.rs` + `src/lib.rs`:加 `system init`、`fact` 命令组、`project init --system`、`matrix link --project-fact`、`system *` 的 `--system` 选项。
-- `src/model.rs`:加 `ProjectFactKind` 枚举。
-- `src/ingest.rs` + `schemas/ingest-v1.schema.json`:统一协议、严格校验、计划、
-  幂等写入和来源追踪；删除 `src/parse.rs` 与旧的专用 ingest 实现。
+### 更多分发渠道
 
-## demo 数据 & 测试
+当前发布 crates.io 包。若要支持 `uv tool install complai`，需要引入 Maturin 二进制
+wheel、PyPI 包名和 Linux/macOS/Windows 发布矩阵。
 
-- 重建 demo:`kb scaffold` -> `tmp/kb/compliance/dengbao-2.0`;`system init order-platform --name 订单平台`;系统 facts 灌到 `tmp/kb/system/order-platform`;`project init ... --system order-platform`。
-- 更新 `tests/flow.rs`:覆盖四种统一 ingest 记录、重复导入幂等、共享 system 和完整报告流程。
-- 新增项目 fact 单元测试。
-
-## 实施阶段(增量)
-
-- **A 存储分层 + system 共享化**:`compliance_root`/`system_root`;建 `src/system/` 模块,迁 Fact 逻辑到共享 `system/<slug>/`,加 slug/display_name/`system init`;`kb/*` 路径改 `compliance/`。
-- **B 项目重构**:`project.yaml` +system;`project init --system`;删 `project/system.rs`,加 `src/project/fact.rs` + `fact` 命令 + ProjectFact schema。
-- **C matrix**:`MatrixEntry` +project_facts;`matrix link --project-fact`;`matrix trace` 跨三层。
-- **D 接线 + demo 重建 + 测试 + clippy**。
-
-## 不在本次范围
-- 现有 demo 数据(tmp/)直接重建,不做迁移工具(尚无真实数据)。
-- `system` 的 fact 版本链(`supersedes`)已有 schema,本次不额外做演化逻辑。
-- evidence 仍项目级(后续若需跨框架复用证据再议)。
+发布操作遵循 [docs/releasing.md](docs/releasing.md)。

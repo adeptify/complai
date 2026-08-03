@@ -60,7 +60,7 @@ pub struct ControlFrontmatter {
     pub excerpt_status: ExcerptStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_reviewed: Option<NaiveDate>,
-    /// 最近一次结构化导入的来源。手工维护或旧版控制项可以没有该字段。
+    /// 最近一次结构化导入的来源。手工维护的控制项可以没有该字段。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ingest: Option<IngestMetadata>,
 }

@@ -72,35 +72,62 @@ pub struct Matrix {
     pub entries: BTreeMap<ControlId, MatrixEntry>,
 }
 
+/// 更新单个矩阵条目时可选的说明字段。
+///
+/// 私有字段与链式构造方法让后续版本可以增加选项，而不必继续扩大
+/// [`set`] 的参数列表或破坏调用方的结构体字面量。
+#[derive(Debug, Clone, Default)]
+pub struct MatrixSetOptions {
+    gap: Option<String>,
+    owner: Option<String>,
+    remediation: Option<String>,
+}
+
+impl MatrixSetOptions {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn gap(mut self, gap: impl Into<String>) -> Self {
+        self.gap = Some(gap.into());
+        self
+    }
+
+    pub fn owner(mut self, owner: impl Into<String>) -> Self {
+        self.owner = Some(owner.into());
+        self
+    }
+
+    pub fn remediation(mut self, remediation: impl Into<String>) -> Self {
+        self.remediation = Some(remediation.into());
+        self
+    }
+
+    pub(crate) fn from_optional(
+        gap: Option<String>,
+        owner: Option<String>,
+        remediation: Option<String>,
+    ) -> Self {
+        Self {
+            gap,
+            owner,
+            remediation,
+        }
+    }
+}
+
 fn matrix_path(root: &Path) -> PathBuf {
     root.join("matrix.yaml")
 }
 
 pub fn load(root: &Path) -> eyre::Result<Matrix> {
     let content = fs::read_to_string(matrix_path(root)).wrap_err("读 matrix.yaml 失败")?;
-    let mut matrix: Matrix = serde_yml::from_str(&content).wrap_err("解析 matrix.yaml 失败")?;
-
-    // v0.3 之前用无内容的 `na` 表示初始项。只迁移没有理由、时间或
-    // 导入痕迹的项；经评估并写明不适用理由的旧 `na` 继续保留。
-    for entry in matrix.entries.values_mut() {
-        let is_legacy_default = entry.status == ControlStatus::Na
-            && entry.gap.is_empty()
-            && entry.last_updated.is_none()
-            && entry.ingest.is_none()
-            && entry.owner.is_empty()
-            && entry.evidence.is_empty()
-            && entry.facts.is_empty()
-            && entry.project_facts.is_empty();
-        if is_legacy_default {
-            entry.status = ControlStatus::Unassessed;
-        }
-    }
-    Ok(matrix)
+    serde_yml::from_str(&content).wrap_err("解析 matrix.yaml 失败")
 }
 
 pub(crate) fn save(root: &Path, matrix: &Matrix) -> eyre::Result<()> {
     let yaml = serde_yml::to_string(matrix).wrap_err("序列化 matrix 失败")?;
-    fs::write(matrix_path(root), yaml).wrap_err("写 matrix.yaml 失败")
+    crate::storage::atomic_write(&matrix_path(root), yaml).wrap_err("写 matrix.yaml 失败")
 }
 
 pub fn show(status_filter: Option<&str>) -> eyre::Result<()> {
@@ -145,12 +172,13 @@ pub fn show(status_filter: Option<&str>) -> eyre::Result<()> {
     Ok(())
 }
 
-pub fn set(
-    control_str: &str,
-    status_str: &str,
-    gap: Option<String>,
-    owner: Option<String>,
-) -> eyre::Result<()> {
+pub fn set(control_str: &str, status_str: &str, options: MatrixSetOptions) -> eyre::Result<()> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
+    let MatrixSetOptions {
+        gap,
+        owner,
+        remediation,
+    } = options;
     let cid: ControlId = control_str
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
@@ -174,6 +202,12 @@ pub fn set(
             }
         }
     }
+    if remediation
+        .as_ref()
+        .is_some_and(|value| value.trim().is_empty())
+    {
+        eyre::bail!("--remediation 不能为空");
+    }
     let root = project_root().wrap_err("定位当前项目失败")?;
     let mut matrix = load(&root).wrap_err("加载控制矩阵失败")?;
     {
@@ -192,6 +226,9 @@ pub fn set(
         if let Some(o) = owner {
             entry.owner = o;
         }
+        if let Some(remediation) = remediation {
+            entry.remediation = remediation;
+        }
         entry.last_updated = Some(Local::now().date_naive());
     }
     save(&root, &matrix).wrap_err("保存控制矩阵失败")?;
@@ -205,6 +242,7 @@ pub fn link(
     fact: Option<String>,
     project_fact: Option<String>,
 ) -> eyre::Result<()> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
     if evidence.is_none() && fact.is_none() && project_fact.is_none() {
         eyre::bail!("至少需要 --evidence / --fact / --project-fact 之一");
     }
@@ -213,40 +251,30 @@ pub fn link(
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
     let root = project_root().wrap_err("定位当前项目失败")?;
     let mut matrix = load(&root).wrap_err("加载控制矩阵失败")?;
+    if !matrix.entries.contains_key(&cid) {
+        eyre::bail!("控制 {cid} 不在矩阵中");
+    }
 
-    // 在写入矩阵前校验所有引用，避免差距分析产生表面上已关联、
-    // 实际无法追溯的证据或事实 ID。
-    if let Some(evidence_id) = &evidence {
-        let evidence_index =
-            crate::project::evidence::load_index(&root).wrap_err("加载证据索引失败")?;
-        if !evidence_index.evidence.contains_key(evidence_id) {
-            eyre::bail!("证据 {evidence_id} 不存在");
+    // 双向字段在同一事务中更新，保证 matrix trace 与各 find 命令看到同一关系。
+    crate::storage::transaction(|| {
+        if let Some(evidence_id) = &evidence {
+            crate::project::evidence::link_control(&root, evidence_id, &cid)
+                .wrap_err("同步证据控制关联失败")?;
         }
-    }
-    if let Some(fact_id) = &fact {
-        let system = current_system_slug().wrap_err("读取当前项目系统失败")?;
-        let fact_index = crate::system::fact::load_index(&system)
-            .wrap_err_with(|| format!("加载系统 `{system}` 事实索引失败"))?;
-        if !fact_index.facts.iter().any(|entry| entry.id == *fact_id) {
-            eyre::bail!("系统事实 {fact_id} 不存在");
+        if let Some(fact_id) = &fact {
+            let system = current_system_slug().wrap_err("读取当前项目系统失败")?;
+            crate::system::fact::link_control(&system, fact_id, &cid)
+                .wrap_err("同步系统事实控制关联失败")?;
         }
-    }
-    if let Some(project_fact_id) = &project_fact {
-        let fact_index =
-            crate::project::fact::load_index(&root).wrap_err("加载项目事实索引失败")?;
-        if !fact_index
-            .facts
-            .iter()
-            .any(|entry| entry.id == *project_fact_id)
-        {
-            eyre::bail!("项目事实 {project_fact_id} 不存在");
+        if let Some(project_fact_id) = &project_fact {
+            crate::project::fact::link_control(&root, project_fact_id, &cid)
+                .wrap_err("同步项目事实控制关联失败")?;
         }
-    }
-    {
+
         let entry = matrix
             .entries
             .get_mut(&cid)
-            .ok_or_else(|| eyre::eyre!("控制 {cid} 不在矩阵中"))
+            .ok_or_else(|| eyre::eyre!("控制 {cid} 在关联事务中消失"))
             .wrap_err("定位矩阵控制失败")?;
         if let Some(ev) = &evidence
             && !entry.evidence.contains(ev)
@@ -264,8 +292,9 @@ pub fn link(
             entry.project_facts.push(pf.clone());
         }
         entry.last_updated = Some(Local::now().date_naive());
-    }
-    save(&root, &matrix).wrap_err("保存控制矩阵失败")?;
+        save(&root, &matrix).wrap_err("保存控制矩阵失败")
+    })
+    .wrap_err("关联矩阵事务失败")?;
     println!("linked to {cid}: evidence={evidence:?} fact={fact:?} project_fact={project_fact:?}");
     Ok(())
 }
@@ -294,7 +323,9 @@ pub fn trace(control_str: &str) -> eyre::Result<()> {
         .find(|e| e.id == cid)
         .ok_or_else(|| eyre::eyre!("控制 {cid} 不在知识库索引中"))
         .wrap_err("定位知识库控制失败")?;
-    let control_body = fs::read_to_string(kb_dir.join(&ctl.file))
+    let control_path =
+        crate::paths::join_stored_path(&kb_dir, &ctl.file).wrap_err("解析控制正文存储路径失败")?;
+    let control_body = fs::read_to_string(control_path)
         .wrap_err_with(|| format!("读取控制正文 {} 失败", ctl.file))?;
     println!("=== 控制正文 ===\n{control_body}");
 

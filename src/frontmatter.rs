@@ -10,8 +10,8 @@
 //! 手写解析围栏以完全掌控边界情况,避免引入额外依赖的 API 摩擦;
 //! YAML 部分仍交给 `serde_yml` 反序列化。
 
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use eyre::WrapErr;
 
@@ -43,7 +43,9 @@ pub fn parse<T: DeserializeOwned + 'static>(content: &str) -> eyre::Result<Docum
         }
         yaml_lines.push(line);
     }
-    let body_start = body_start.ok_or_else(|| eyre::eyre!("frontmatter 未以 `---` 闭合"))?;
+    let body_start = body_start
+        .ok_or_else(|| eyre::eyre!("frontmatter 未以 `---` 闭合"))
+        .wrap_err("定位 frontmatter 正文起点失败")?;
 
     let yaml_str = yaml_lines.join("\n");
     let data: T = serde_yml::from_str(&yaml_str).wrap_err("解析 frontmatter YAML 失败")?;

@@ -3,7 +3,7 @@
 //! `kb_root()` 返回所有知识库(compliance + system)的公共根目录,
 //! 供 `compliance` 与 `system` 两个模块共用,避免二者互相依赖。
 
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use eyre::WrapErr;
 use sha2::Digest;
@@ -25,7 +25,8 @@ pub fn kb_root() -> eyre::Result<PathBuf> {
 /// 原始 ID 始终保留在结构化数据中；这个值仅用于物理文件布局。
 /// 摘要后缀可防止不同 Unicode 或路径字符归一化后发生冲突。
 pub(crate) fn safe_path_component(value: &str) -> String {
-    let is_directly_safe = !matches!(value, "." | "..")
+    let is_directly_safe = !value.is_empty()
+        && !matches!(value, "." | "..")
         && value
             .chars()
             .all(|character| character.is_ascii_alphanumeric() || ".-_".contains(character));
@@ -58,6 +59,22 @@ pub(crate) fn safe_path_component(value: &str) -> String {
     format!("{prefix}-{}", &hex[..12])
 }
 
+/// 将索引中保存的相对路径限制在指定根目录内。
+///
+/// 索引文件属于本地持久化状态，仍可能被手工修改或损坏；读取或清理这些路径
+/// 时不能直接 `root.join(value)`，否则绝对路径和 `..` 会逃出知识库。
+pub(crate) fn join_stored_path(root: &Path, value: &str) -> eyre::Result<PathBuf> {
+    let relative = Path::new(value);
+    if value.is_empty()
+        || relative
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        eyre::bail!("存储路径 `{value}` 必须是安全的相对路径");
+    }
+    Ok(root.join(relative))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +85,17 @@ mod tests {
         assert!(!component.contains('/'));
         assert!(!component.contains(".."));
         assert_eq!(component, safe_path_component("../A/5.1"));
+        assert!(!safe_path_component("").is_empty());
+    }
+
+    #[test]
+    fn stored_paths_must_remain_below_their_root() {
+        let root = Path::new("kb/system/example");
+        assert_eq!(
+            join_stored_path(root, "architecture/SYS-F-0001.md").expect("正常相对路径有效"),
+            root.join("architecture/SYS-F-0001.md")
+        );
+        assert!(join_stored_path(root, "../outside.md").is_err());
+        assert!(join_stored_path(root, "/outside.md").is_err());
     }
 }

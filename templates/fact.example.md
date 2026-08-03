@@ -10,7 +10,7 @@ source:
   collector: agent
 confidence: high
 related_controls:
-  - "dengbao-2.0:8.1.2"
+  - "dengbao-2.0:8.1.2.1"
   - "dengbao-2.0:8.1.3"
 status: current
 ---

@@ -19,6 +19,7 @@ type GroupedEntries<'a> =
     BTreeMap<String, BTreeMap<String, Vec<(String, String, &'a MatrixEntry)>>>;
 
 pub fn generate() -> eyre::Result<()> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
     let root = project_root().wrap_err("定位当前项目失败")?;
     let matrix = crate::project::matrix::load(&root).wrap_err("加载控制矩阵失败")?;
     let framework = matrix.framework.as_str().to_string();
@@ -128,7 +129,7 @@ pub fn generate() -> eyre::Result<()> {
     if let Some(parent) = report_path.parent() {
         fs::create_dir_all(parent).wrap_err("创建 drafts 目录失败")?;
     }
-    fs::write(&report_path, &out).wrap_err("写报告失败")?;
+    crate::storage::atomic_write(&report_path, &out).wrap_err("写报告失败")?;
     println!(
         "wrote {} ({} controls, {} gaps)",
         report_path.display(),

@@ -13,4 +13,5 @@ pub mod paths;
 pub mod project;
 pub mod reports;
 pub mod skill;
+mod storage;
 pub mod system;

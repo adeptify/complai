@@ -95,7 +95,12 @@ pub fn run_matrix(cmd: MatrixCommand) -> eyre::Result<()> {
             status,
             gap,
             owner,
-        } => matrix::set(&control, &status, gap, owner),
+            remediation,
+        } => matrix::set(
+            &control,
+            &status,
+            matrix::MatrixSetOptions::from_optional(gap, owner, remediation),
+        ),
         MatrixCommand::Link {
             control,
             evidence,

@@ -64,7 +64,8 @@ project.
 - **Format-agnostic input:** Agents and their available tools read source
   documents, so users do not need to prepare a dedicated import template.
 - **Controlled writes:** Every batch write follows
-  `schema → validate → plan → apply`.
+  `schema → validate → plan → apply`; atomic replacement, a write lock, and
+  error rollback keep content and indexes consistent.
 - **Traceable provenance:** Records retain source type, document reference,
   page/sheet/section location, optional SHA-256, document date, confidence, and
   a stable external key.
@@ -239,7 +240,8 @@ complai evidence add mfa-login.png \
 complai matrix link dengbao-2.0:8.1.4.1 --evidence EV-0001
 complai matrix set dengbao-2.0:8.1.4.1 gap \
   --gap "MFA is not enabled for operations access" \
-  --owner "Security Lead"
+  --owner "Security Lead" \
+  --remediation "Enable operations MFA and review the login policy"
 
 complai gen report
 ```
@@ -254,7 +256,7 @@ The report is written to `drafts/compliance-report.md` inside the project.
 | Business system KB | Reuse architecture, asset, data-flow, and policy facts | `system init/add/find/show` |
 | Unified ingest | Strict, traceable, idempotent agent batch writes | `ingest schema/validate/plan/apply` |
 | Assessment projects | Bind one system, framework, and optional level | `project init/show` |
-| Control matrix | Track status, gaps, owners, facts, and evidence references | `matrix show/set/link/trace` |
+| Control matrix | Track status, gaps, remediation, owners, facts, and evidence references | `matrix show/set/link/trace` |
 | Project facts | Store findings, remediation, exceptions, decisions, and notes | `fact add/find/show` |
 | Evidence management | Copy, hash, classify, query, and link evidence | `evidence add/list/find/show` |
 | Report generation | Generate the current compliance gap report | `gen report` |
@@ -283,20 +285,21 @@ Shared knowledge is stored in `~/.complai/kb` by default:
 
 ```text
 ~/.complai/kb/
+├── .complai.lock
 ├── compliance/<framework>/
 │   ├── index.yaml
 │   ├── <framework-specific-path>/<control-id>.md
 │   └── controls/<safe-control-id>.md
 └── system/<slug>/
     ├── index.yaml
-    └── <domain>/SYS-F-NNNN.md
+    └── <safe-domain>/SYS-F-NNNN.md
 
 <project>/
 ├── project.yaml
 ├── matrix.yaml
 ├── facts/
 ├── evidence.yaml
-├── evidence/
+├── evidence/<control>/EV-NNNN-<filename>
 └── drafts/
 ```
 
@@ -332,9 +335,10 @@ git clone https://github.com/adeptify/complai.git
 cd complai
 
 cargo build
-cargo test
-cargo clippy --all-targets -- -D warnings
-cargo package --list --allow-dirty
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features --locked
+cargo package --locked
 ```
 
 The project uses Rust 2024. When changing Agent Skill distribution, also run:
@@ -365,6 +369,7 @@ tests/                        unit, integration, and snapshot tests
 - [File formats and initialization](docs/file-templates.md)
 - [Agent Skill architecture](skills/SKILLS.md)
 - [Storage and design plan](PLAN.md)
+- [Release process](docs/releasing.md)
 - [JSON ingest schema](schemas/ingest-v1.schema.json)
 
 ## License

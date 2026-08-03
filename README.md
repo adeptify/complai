@@ -88,17 +88,17 @@ Complai 由 Agent 驱动：安装 CLI、安装轻量 discovery skill，然后直
 
 ### 1. 安装 CLI
 
-需要 stable Rust 和 Cargo。当前功能基线是 Complai `0.3.0`，可以从仓库安装：
+需要 stable Rust 和 Cargo。当前功能基线是 Complai `0.3.0`：
 
 ```sh
-cargo install --git https://github.com/adeptify/complai --locked --force
+cargo install complai --version 0.3.0 --locked
 complai --version
 ```
 
-`0.3.0` 发布到 crates.io 后，也可以安装指定版本：
+如需使用尚未发布的仓库版本：
 
 ```sh
-cargo install complai --version 0.3.0 --locked --force
+cargo install --git https://github.com/adeptify/complai --locked --force
 complai --version
 ```
 

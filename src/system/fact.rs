@@ -12,7 +12,7 @@ use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 
 use crate::frontmatter;
-use crate::model::ControlId;
+use crate::model::{ControlId, IngestMetadata};
 use crate::system::system_dir;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -87,6 +87,8 @@ pub struct FactFrontmatter {
     pub status: FactStatus,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub supersedes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ingest: Option<IngestMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,6 +100,8 @@ pub struct FactIndexEntry {
     pub tags: Vec<String>,
     #[serde(default)]
     pub related_controls: Vec<ControlId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_key: Option<String>,
     pub file: String,
 }
 
@@ -134,7 +138,10 @@ fn next_fact_id(index: &FactIndex) -> String {
     let max = index
         .facts
         .iter()
-        .filter_map(|f| f.id.strip_prefix("SYS-F-").and_then(|s| s.parse::<u32>().ok()))
+        .filter_map(|f| {
+            f.id.strip_prefix("SYS-F-")
+                .and_then(|s| s.parse::<u32>().ok())
+        })
         .max()
         .unwrap_or(0);
     format!("SYS-F-{:04}", max + 1)
@@ -153,7 +160,10 @@ fn create_fact(slug: &str, index: &mut FactIndex, draft: &FactDraft) -> eyre::Re
     let id = next_fact_id(index);
     let kind = FactSourceType::parse(&draft.kind)?;
     let related_controls = match &draft.control {
-        Some(c) => vec![c.parse().wrap_err_with(|| format!("`{c}` 不是合法控制 ID"))?],
+        Some(c) => vec![
+            c.parse()
+                .wrap_err_with(|| format!("`{c}` 不是合法控制 ID"))?,
+        ],
         None => vec![],
     };
     let today = Local::now().date_naive();
@@ -175,6 +185,7 @@ fn create_fact(slug: &str, index: &mut FactIndex, draft: &FactDraft) -> eyre::Re
         related_controls: related_controls.clone(),
         status: FactStatus::default(),
         supersedes: Vec::new(),
+        ingest: None,
     };
     let body_md = format!("# {}\n\n{}\n", draft.title, draft.body);
     let content = frontmatter::serialize(&fm, &body_md)?;
@@ -182,7 +193,8 @@ fn create_fact(slug: &str, index: &mut FactIndex, draft: &FactDraft) -> eyre::Re
     let rel = format!("{}/{id}.md", draft.domain);
     let path = system_dir(slug)?.join(&rel);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).wrap_err_with(|| format!("创建目录 {} 失败", parent.display()))?;
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("创建目录 {} 失败", parent.display()))?;
     }
     fs::write(&path, content).wrap_err_with(|| format!("写入 {} 失败", path.display()))?;
 
@@ -192,6 +204,7 @@ fn create_fact(slug: &str, index: &mut FactIndex, draft: &FactDraft) -> eyre::Re
         title: draft.title.clone(),
         tags: Vec::new(),
         related_controls,
+        external_key: None,
         file: rel,
     });
     Ok(id)
@@ -258,51 +271,5 @@ pub fn find(slug: &str, control_str: &str) -> eyre::Result<()> {
         }
     }
     println!("\n{found} facts in system `{slug}` related to {cid}");
-    Ok(())
-}
-
-/// `system ingest --from` 的单条输入(YAML)。
-#[derive(Deserialize)]
-struct FactInput {
-    domain: String,
-    title: String,
-    body: String,
-    #[serde(default)]
-    control: Option<String>,
-    #[serde(default = "default_kind", rename = "type")]
-    kind: String,
-    #[serde(default, rename = "ref")]
-    reference: Option<String>,
-}
-
-fn default_kind() -> String {
-    "user".to_string()
-}
-
-#[derive(Deserialize)]
-struct FactInputList {
-    facts: Vec<FactInput>,
-}
-
-/// 从 YAML 批量导入事实到系统 `<slug>`。
-pub fn ingest(slug: &str, from: &str) -> eyre::Result<()> {
-    let content = fs::read_to_string(from).wrap_err_with(|| format!("读取 {from} 失败"))?;
-    let list: FactInputList = serde_yml::from_str(&content).wrap_err("解析 facts yaml 失败")?;
-    let mut index = load_index(slug)?;
-    let mut count = 0usize;
-    for input in list.facts {
-        let draft = FactDraft {
-            domain: input.domain,
-            title: input.title,
-            body: input.body,
-            control: input.control,
-            kind: input.kind,
-            reference: input.reference,
-        };
-        create_fact(slug, &mut index, &draft)?;
-        count += 1;
-    }
-    save_index(slug, &index)?;
-    println!("ingested {count} facts into system `{slug}`");
     Ok(())
 }

@@ -27,7 +27,8 @@ description: >-
    ```
    complai compliance list --framework <框架>
    ```
-   若无控制项或报索引不存在,先 `complai compliance scaffold <框架>`(必要时 `compliance ingest <框架> notes.md` 补正文)。
+   若无控制项或报索引不存在,先 `complai compliance scaffold <框架>`。规范正文
+   通过 `doc-ingest` workflow 从用户有权使用的材料抽取，再用统一 ingest bundle 写入。
 
 2. **系统(复用或新建)**:
    - 新系统:`complai system init <slug> --name "<显示名>"`
@@ -47,8 +48,8 @@ description: >-
 
 ## 后续(本 skill 不执行,提示用户)
 
-- **若系统是新建的**:先录系统事实(架构/数据流/资产/...):
-  `complai system add --system <slug> ...` 或 `system ingest --from facts.yaml`(可配合 `parse` + `doc-ingest` skill 从现有文档灌)。
+- **若系统是新建的**:加载 `doc-ingest` workflow，从已有备案、设计或测评材料抽取
+  架构/数据流/资产等事实；少量人工事实也可用 `complai system add`。
 - **差距分析**:跑 `gap-analysis` skill(逐控制判状态、落缺口)。
 - **整改/证据**:`fact add --kind 整改 ...`、`evidence add ...`。
 - **报告**:`gen report`。

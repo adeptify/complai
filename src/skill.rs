@@ -23,7 +23,7 @@ const SKILLS: &[Skill] = &[
     },
     Skill {
         name: "doc-ingest",
-        description: "解析审计文档并导入事实、控制正文或矩阵",
+        description: "从任意可访问材料抽取并统一导入事实、控制正文或矩阵",
         prompt: include_str!("skills_content/doc-ingest/SKILL.md"),
     },
     Skill {

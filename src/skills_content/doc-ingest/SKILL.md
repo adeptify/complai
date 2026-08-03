@@ -1,62 +1,58 @@
 ---
 name: doc-ingest
 description: >-
-  解析并导入 Excel（.xlsx）等合规审计材料，把表格列映射为系统事实、控制项正文
-  或矩阵状态。用于用户要求导入资产清单、数据流、控制要求清单或差距表，或者需要
-  通过 `complai parse`、`system ingest`、`compliance ingest` 或 `matrix set`
-  完成文档灌库时。
+  从 Excel、PDF、Word、图片、飞书、腾讯文档等任意可访问材料中抽取合规知识，
+  分类为控制内容、系统事实、项目事实或矩阵评估，并通过版本化 JSON bundle
+  校验、预览和幂等写入 Complai。用于用户要求导入备案材料、测评报告、资产清单、
+  数据流、控制要求、差距记录或云文档时。
 ---
 
-# 文档灌库 (doc-ingest)
+# 文档灌库
 
-把外部文档(主要是 .xlsx:资产清单、控制清单、差距表)转成知识库内容。
+原始输入不要求模板。使用当前环境适合该来源的读取能力完成“来源 -> 内容”：
+本地文档使用对应的 PDF、文档、表格或 OCR 工具；云文档优先使用 Connector/API，
+其次使用已登录浏览器，仍不可访问时请用户授权或导出。不要要求用户先整理成
+Complai 专用格式。
 
-核心分工:`complai parse` 做"字节 -> 表格"(确定性);**列含义识别与字段映射由 agent 判断**(需理解)。
+Complai 只接收 Agent 生成的版本化 JSON。先获取当前二进制的权威 schema：
 
-## 流程
-
-1. **抽取表格**:`complai parse <file>.xlsx` -> 每张表输出为 Markdown 表格(首行作表头)。
-2. **判断表类型并按列映射**(agent 判断;不确定时向用户确认列含义,不要臆测):
-
-   | 表类型 | 识别线索 | 灌入目标 | 命令 |
-   |---|---|---|---|
-   | 资产清单 / 数据流 / 部署等 | 列含 资产名/类型/位置/数据项 等 | 系统知识(facts) | 产出 `facts.yaml` -> `complai system ingest --from facts.yaml` |
-   | 控制要求清单 | 列含 控制ID + 要求摘要/实施指引/常见缺陷 | 控制项正文 | 产出 `notes.md`(`@@ <控制ID>` 分块)-> `complai compliance ingest <framework> notes.md` |
-   | 差距表 | 列含 控制ID + 状态 + 缺口 | 矩阵状态 | `complai matrix set <id> <status> --gap "..."` |
-
-3. **核对**:`complai system find --control <id>` / `complai compliance show <id>` / `complai matrix show --status gap`。
-
-## facts.yaml 格式(`system ingest --from`)
-
-```yaml
-facts:
-  - domain: 资产            # 架构/组件/数据流/数据分类/资产/技术栈/部署/网络/人员/策略
-    title: 用户数据库
-    control: "dengbao-2.0:8.1.4.8"   # 可选,关联控制
-    type: doc              # doc/interview/scan/user,默认 user
-    ref: 资产清单.xlsx      # 可选,来源
-    body: "MySQL 8.0 主从,杭州 AZ,每日全备+增量"
-  - domain: 数据流
-    title: 订单 PII 处理
-    control: "dengbao-2.0:8.1.4.8"
-    body: "订单含手机号/地址,落库前 AES-256 加密"
+```sh
+complai ingest schema
 ```
 
-## notes.md 格式(`compliance ingest`,控制项正文)
+## 工作流
 
-```
-@@ dengbao-2.0:8.1.4.1
-## 要求摘要
-<控制要求清单该行的"要求摘要"列>
+1. 读取材料并保留来源标识、文件哈希（可得时）、文档日期以及页码、工作表、
+   单元格、章节或云文档块等定位信息。
+2. 按语义把内容拆成原子记录：
+   - `control_content`：权威规范中的要求摘要、实施指引和常见缺陷。
+   - `system_fact`：可跨项目复用的架构、资产、数据流、部署、人员或策略事实。
+   - `project_fact`：本次备案的发现、整改、例外、决策或备注。
+   - `matrix_assessment`：针对一个控制项的 `met/partial/gap/na` 结论。
+3. 按 `complai ingest schema` 输出 `tmp/complai-ingest.json`。为每条记录生成稳定
+   `external_key`，组合来源身份、定位和记录语义；不要使用会随正文改写而变化的
+   随机值。
+4. 依次执行：
 
-## 实施指引
-<该行"实施指引"列>
+   ```sh
+   complai ingest validate --from tmp/complai-ingest.json
+   complai ingest plan --from tmp/complai-ingest.json
+   complai ingest apply --from tmp/complai-ingest.json
+   ```
 
-## 常见缺陷
-<该行"常见缺陷"列>
-```
+5. 检查 plan 中的 create/update/unchanged 和目标是否符合预期，再 apply。写入后用
+   `compliance show`、`system find/show`、`fact find/show` 或 `matrix show/trace`
+   抽查结果。
 
-## 约束
-- 列映射由 agent 判断;不确定列含义时向用户确认,不要臆测。
-- 只调 CLI 写入;不直接编辑 `system/`、控制文件或 `matrix.yaml`。
-- 一张表可能同时含多类信息,按行拆分到合适的灌入路径。
+## 判断边界
+
+- 同一材料可以产生多种记录；按陈述性质拆分，不按文件整体归类。
+- 测评报告中的系统描述属于 `system_fact`，测评发现属于 `project_fact` 或
+  `matrix_assessment`。除非来源本身是权威规范，不要把测评机构解释写成
+  `control_content`。
+- `control_content.completeness=complete` 仅在三个正文段落均有可靠来源时使用；
+  缺失内容保持 `partial`，不要补造。
+- 每条记录必须带精确来源定位和置信度。低置信度记录默认不能 apply；只有用户审阅
+  并明确确认后才使用 `--allow-low-confidence`。
+- 控制正文使用自己的话概述，不复录用户无权再分发的标准原文。
+- 只通过统一 ingest CLI 写入批量抽取结果，不直接编辑 KB、索引或矩阵文件。

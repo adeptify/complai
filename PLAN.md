@@ -42,14 +42,14 @@ level: 3
 
 ## 命令变更
 
-### `kb`(compliance KB)- 路径加一层 `compliance/`
-- `kb scaffold/build/show/list/ingest <framework>` -> 操作 `compliance/<framework>/`。
+### `compliance`(compliance KB)- 路径加一层 `compliance/`
+- `compliance scaffold/build/show/list` -> 操作 `compliance/<framework>/`。
 - 新增 `compliance_root() = kb_root/compliance/`;原 `framework_dir` 改名 `compliance_dir`。
 
 ### `system`(共享 system KB,从项目迁出)
 - 新 `system init <slug> --name "<display>"` -> 建 `system/<slug>/index.yaml`(display_name + 空 facts)。
 - `system add --domain --title [--control] [--type] [--ref] [--body]` -> 写 `system/<slug>/`。**slug 默认取当前 project.yaml 的 system 字段**,或 `--system <slug>` 显式指定。
-- `system show <id>` / `system find --control <id>` / `system ingest --from <file>` -> 同上,slug 默认项目引用。
+- `system show <id>` / `system find --control <id>` -> 同上,slug 默认项目引用。
 - 新 `system_root() = kb_root/system/`、`system_dir(slug)`;`system_current_slug()` 从项目读 system 引用。
 
 ### `project`
@@ -64,26 +64,32 @@ level: 3
 - `matrix trace <control>` -> 控制正文(compliance KB)+ 系统事实(共享 system KB,按项目 system 引用)+ 项目事实(项目 `facts/`)+ 证据(项目)+ 矩阵状态。
 - `matrix show/set` -> 基本不变(show 多显示 project_facts 计数)。
 
-### `evidence` / `gen` / `parse` -> 不变。
+### `ingest`(统一 Agent 写入协议)
+- `ingest schema` 输出版本化 JSON Schema。
+- `ingest validate/plan/apply --from <bundle.json>` 统一写入控制内容、系统事实、
+  项目事实和矩阵评估；保存来源定位与置信度，并按 `external_key` 幂等 upsert。
+- 原始 Excel、PDF、Word、图片和云文档由 Agent 使用当前环境的读取能力处理，
+  CLI 不再提供格式专用 `parse` 或目标专用批量 ingest 命令。
 
 ## 模块/代码变更
 
 - `src/kb/mod.rs`:加 `compliance_root()`/`compliance_dir()`;`framework_dir` -> `compliance_dir`。
-- `src/kb/{scaffold,build,query,ingest,control}.rs`:路径改 `compliance/`。
-- 新 `src/system/` 模块(`mod.rs` + `fact.rs` + `init.rs` + `query.rs`):把现 `src/project/system.rs` 的 Fact schema + create_fact + add/show/find/ingest 迁过来,改为操作共享 `system/<slug>/`;加 slug 解析 + display_name + `system init`。
+- `src/compliance/{scaffold,build,query,control}.rs`:操作 `compliance/`。
+- 新 `src/system/` 模块(`mod.rs` + `fact.rs` + `init.rs`):共享 Fact schema 与
+  add/show/find；批量写入统一收敛到 `src/ingest.rs`。
 - `src/project/system.rs` 删除(fact 逻辑迁到 `src/system/`)。
 - `src/project/{mod,init}.rs`:init 加 `--system`;project 不再建 `system/`;改建 `facts/` 空索引。
 - 新 `src/project/fact.rs`:ProjectFact schema + add/show/find(项目专属)。
 - `src/project/matrix.rs`:`MatrixEntry` + `project_facts`;`link` 加 `--project-fact`;`trace` 跨三层(compliance + system + project facts + evidence)拉取。
 - `src/cli.rs` + `src/main.rs` + `src/lib.rs`:加 `system init`、`fact` 命令组、`project init --system`、`matrix link --project-fact`、`system *` 的 `--system` 选项。
 - `src/model.rs`:加 `ProjectFactKind` 枚举。
-- `src/parse.rs`:不变。
+- `src/ingest.rs` + `schemas/ingest-v1.schema.json`:统一协议、严格校验、计划、
+  幂等写入和来源追踪；删除 `src/parse.rs` 与旧的专用 ingest 实现。
 
 ## demo 数据 & 测试
 
 - 重建 demo:`kb scaffold` -> `tmp/kb/compliance/dengbao-2.0`;`system init order-platform --name 订单平台`;系统 facts 灌到 `tmp/kb/system/order-platform`;`project init ... --system order-platform`。
-- 更新 `tests/flow.rs`:system facts 路径变共享;`project init` 加 `--system`;新增 `fact add`/`matrix link --project-fact` 测试;新增「两项目引用同一 system」复用测试。
-- `tests/parse_xlsx.rs`:不变。
+- 更新 `tests/flow.rs`:覆盖四种统一 ingest 记录、重复导入幂等、共享 system 和完整报告流程。
 - 新增项目 fact 单元测试。
 
 ## 实施阶段(增量)

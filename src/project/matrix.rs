@@ -12,7 +12,7 @@ use chrono::{Local, NaiveDate};
 use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{ControlId, ControlStatus, Framework};
+use crate::model::{ControlId, ControlStatus, Framework, IngestMetadata};
 use crate::project::{current_system_slug, project_root};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +34,8 @@ pub struct MatrixEntry {
     pub remediation: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_updated: Option<NaiveDate>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ingest: Option<IngestMetadata>,
 }
 
 impl MatrixEntry {
@@ -47,6 +49,7 @@ impl MatrixEntry {
             gap: String::new(),
             remediation: String::new(),
             last_updated: None,
+            ingest: None,
         }
     }
 }
@@ -77,7 +80,7 @@ pub fn load(root: &Path) -> eyre::Result<Matrix> {
     serde_yml::from_str(&content).wrap_err("解析 matrix.yaml 失败")
 }
 
-fn save(root: &Path, matrix: &Matrix) -> eyre::Result<()> {
+pub(crate) fn save(root: &Path, matrix: &Matrix) -> eyre::Result<()> {
     let yaml = serde_yml::to_string(matrix).wrap_err("序列化 matrix 失败")?;
     fs::write(matrix_path(root), yaml).wrap_err("写 matrix.yaml 失败")
 }
@@ -96,9 +99,10 @@ pub fn show(status_filter: Option<&str>) -> eyre::Result<()> {
     let mut shown = 0usize;
     for (id, entry) in &matrix.entries {
         if let Some(f) = filter
-            && entry.status != f {
-                continue;
-            }
+            && entry.status != f
+        {
+            continue;
+        }
         println!(
             "{}  [{}]  owner={}  ev={} sf={} pf={}  gap: {}",
             id,
@@ -192,9 +196,7 @@ pub fn link(
         entry.last_updated = Some(Local::now().date_naive());
     }
     save(&root, &matrix)?;
-    println!(
-        "linked to {cid}: evidence={evidence:?} fact={fact:?} project_fact={project_fact:?}"
-    );
+    println!("linked to {cid}: evidence={evidence:?} fact={fact:?} project_fact={project_fact:?}");
     Ok(())
 }
 

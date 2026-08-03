@@ -20,6 +20,11 @@ pub enum Commands {
         #[command(subcommand)]
         command: SkillCommand,
     },
+    /// 从 Agent 生成的版本化 JSON bundle 校验、预览并写入知识库
+    Ingest {
+        #[command(subcommand)]
+        command: IngestCommand,
+    },
     /// 合规知识库(框架控制项,跨项目共享)
     Compliance {
         #[command(subcommand)]
@@ -55,8 +60,6 @@ pub enum Commands {
         #[command(subcommand)]
         command: GenCommand,
     },
-    /// 解析文档(xlsx -> Markdown 表格)供灌库
-    Parse { file: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -65,6 +68,29 @@ pub enum SkillCommand {
     List,
     /// 输出指定 skill 的完整上下文与 prompt
     Get { skill_name: String },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum IngestCommand {
+    /// 输出当前 ingest JSON Schema
+    Schema,
+    /// 校验 JSON 协议和字段约束，不访问写入目标
+    Validate {
+        #[arg(long = "from")]
+        source: String,
+    },
+    /// 校验目标并预览 create/update/unchanged，不写文件
+    Plan {
+        #[arg(long = "from")]
+        source: String,
+    },
+    /// 预检通过后幂等写入；低置信度记录默认拒绝
+    Apply {
+        #[arg(long = "from")]
+        source: String,
+        #[arg(long)]
+        allow_low_confidence: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -82,8 +108,6 @@ pub enum ComplianceCommand {
         #[arg(long)]
         domain: Option<String>,
     },
-    /// 把批量摘录笔记拆成各控制文件(快速建库)
-    Ingest { framework: String, file: String },
 }
 
 #[derive(Subcommand, Debug)]
@@ -123,13 +147,6 @@ pub enum SystemCommand {
         system: Option<String>,
         #[arg(long)]
         control: String,
-    },
-    /// 从 YAML 批量导入系统事实(--from <file>)
-    Ingest {
-        #[arg(long)]
-        system: Option<String>,
-        #[arg(long = "from")]
-        source: String,
     },
 }
 

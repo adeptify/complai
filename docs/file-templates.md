@@ -42,7 +42,8 @@ order-platform-dengbao3/            # 项目根
 
 ### 2.1 控制项 `compliance/<框架>/<域>/<类别>/<id>.md`
 
-`compliance scaffold` 生成空桩;`compliance ingest` 或手工填正文。范例见 [`templates/control.example.md`](../templates/control.example.md)。
+`compliance scaffold` 生成空桩；Agent 抽取的控制内容通过统一 `complai ingest`
+协议写入。范例见 [`templates/control.example.md`](../templates/control.example.md)。
 
 ```markdown
 ---
@@ -75,15 +76,29 @@ last_reviewed: 2026-07-29
 (常见不合规点)
 ```
 
-字段:`id`/`framework`/`domain`(技术|管理)/`category`/`control_id`/`title`/`levels`/`tags`/`mappings`(跨框架,只存 ID)/`expected_evidence`/`excerpt_status`(empty|partial|complete)/`last_reviewed`。
+字段:`id`/`framework`/`domain`(技术|管理)/`category`/`control_id`/`title`/`levels`/`tags`/`mappings`(跨框架,只存 ID)/`expected_evidence`/`excerpt_status`(empty|partial|complete)/`last_reviewed`。统一导入的记录还会带可选 `ingest` 元数据。
 
-### 2.2 摘录笔记 `notes.md`(`compliance ingest` 输入)
+### 2.2 统一 ingest bundle
 
-每块以 `@@ <control-id>` 起首。模板见 [`templates/notes.md`](../templates/notes.md)。
+原始材料不要求固定格式。Agent 读取 Excel、PDF、Word、图片或云文档后，按
+[`schemas/ingest-v1.schema.json`](../schemas/ingest-v1.schema.json) 生成 JSON。
+一个 bundle 可同时包含 `control_content`、`system_fact`、`project_fact` 和
+`matrix_assessment`。通过以下命令校验和写入：
+
+```sh
+complai ingest schema
+complai ingest validate --from tmp/complai-ingest.json
+complai ingest plan --from tmp/complai-ingest.json
+complai ingest apply --from tmp/complai-ingest.json
+```
+
+写入后的 `ingest` 元数据包含稳定 `external_key`、记录摘要、来源类型、标题、
+引用、原文定位、可选文件哈希和文档日期，以及置信度。重复导入相同记录会标记为
+`unchanged`，来源内容变化则执行 `update`。
 
 ### 2.3 系统事实 `system/<slug>/<域>/SYS-F-NNNN.md`(共享)
 
-`system add` / `system ingest` 生成。范例见 [`templates/fact.example.md`](../templates/fact.example.md)。
+`system add` 或统一 `complai ingest` 生成。范例见 [`templates/fact.example.md`](../templates/fact.example.md)。
 
 ```markdown
 ---
@@ -116,6 +131,7 @@ facts:
     domain: 架构
     title: 微服务拓扑
     related_controls: ["dengbao-2.0:8.1.2"]
+    external_key: assessment-v2:p12:architecture
     file: 架构/SYS-F-0001.md
 ```
 
@@ -195,14 +211,11 @@ evidence:
 
 **compliance KB**:
 1. 框架 + 等级(如 dengbao-2.0、3)。
-2. 每控制项摘录:要求摘要/实施指引/常见缺陷(自己话,不复录原文)。
-3. (可选)期望证据、跨框架映射。
+2. 用户有权使用的规范或既有材料。
+3. 每条抽取记录的来源定位和置信度。
 
-```sh
-complai compliance scaffold dengbao-2.0              # 生成控制桩
-# 写 notes.md(@@ <id> 分块)
-complai compliance ingest dengbao-2.0 notes.md       # 灌正文 + 重建索引
-```
+先运行 `complai compliance scaffold dengbao-2.0` 生成控制桩，再由 `doc-ingest`
+workflow 读取材料并通过统一 bundle 写入规范内容。
 
 **system KB**(每个系统一次,可被多项目复用):
 1. system slug(ASCII,如 order-platform)+ 中文显示名(如 订单平台)。
@@ -211,8 +224,9 @@ complai compliance ingest dengbao-2.0 notes.md       # 灌正文 + 重建索引
 ```sh
 complai system init order-platform --name 订单平台
 complai system add --system order-platform --domain 架构 --title "微服务拓扑" --control dengbao-2.0:8.1.2 --body "..."
-# 或批量:complai system ingest --from facts.yaml --system order-platform
 ```
+
+少量人工事实可用 `system add`；从文档批量抽取的事实使用统一 ingest bundle。
 
 ### 3.2 项目(每个备案)
 
@@ -229,6 +243,6 @@ cd order-platform-dengbao3
 
 ## 4. 备注
 
-- 手写 YAML 列表可用流式(`[3]`)或块式;`id`/`control` 含冒号建议加引号。
-- 各 `index.yaml`/`matrix.yaml`/`evidence.yaml` 可手编,但推荐用 CLI 维护(ID/哈希/索引一致)。
+- `index.yaml`/`matrix.yaml`/`evidence.yaml` 是 CLI 管理的内部存储，不应作为导入接口手编。
+- Agent 批量写入前必须先运行 `ingest validate` 和 `ingest plan`。
 - 等保结构表(`data/dengbao-2.0.yaml`)的控制点编号/短名正式使用前请核对。

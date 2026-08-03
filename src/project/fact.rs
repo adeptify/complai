@@ -11,7 +11,7 @@ use eyre::WrapErr;
 use serde::{Deserialize, Serialize};
 
 use crate::frontmatter;
-use crate::model::{ControlId, ProjectFactKind};
+use crate::model::{ControlId, IngestMetadata, ProjectFactKind};
 use crate::project::project_root;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +24,8 @@ pub struct ProjectFactFrontmatter {
     #[serde(default)]
     pub control: Option<ControlId>,
     pub created_at: NaiveDate,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ingest: Option<IngestMetadata>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -33,6 +35,8 @@ pub struct ProjectFactIndexEntry {
     pub title: String,
     #[serde(default)]
     pub control: Option<ControlId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub external_key: Option<String>,
     pub file: String,
 }
 
@@ -64,7 +68,10 @@ fn next_id(index: &ProjectFactIndex) -> String {
     let max = index
         .facts
         .iter()
-        .filter_map(|f| f.id.strip_prefix("PROJ-F-").and_then(|s| s.parse::<u32>().ok()))
+        .filter_map(|f| {
+            f.id.strip_prefix("PROJ-F-")
+                .and_then(|s| s.parse::<u32>().ok())
+        })
         .max()
         .unwrap_or(0);
     format!("PROJ-F-{:04}", max + 1)
@@ -82,7 +89,10 @@ pub fn add(
     let id = next_id(&index);
 
     let control_id = match &control {
-        Some(c) => Some(c.parse().wrap_err_with(|| format!("`{c}` 不是合法控制 ID"))?),
+        Some(c) => Some(
+            c.parse()
+                .wrap_err_with(|| format!("`{c}` 不是合法控制 ID"))?,
+        ),
         None => None,
     };
 
@@ -105,6 +115,7 @@ pub fn add(
         tags: Vec::new(),
         control: control_id.clone(),
         created_at: today,
+        ingest: None,
     };
     let body_md = format!("# {title}\n\n{body}\n");
     let content = frontmatter::serialize(&fm, &body_md)?;
@@ -112,7 +123,8 @@ pub fn add(
     let rel = format!("{}/{id}.md", kind.as_str());
     let path = root.join("facts").join(&rel);
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).wrap_err_with(|| format!("创建目录 {} 失败", parent.display()))?;
+        fs::create_dir_all(parent)
+            .wrap_err_with(|| format!("创建目录 {} 失败", parent.display()))?;
     }
     fs::write(&path, content).wrap_err_with(|| format!("写入 {} 失败", path.display()))?;
 
@@ -121,6 +133,7 @@ pub fn add(
         kind,
         title,
         control: control_id,
+        external_key: None,
         file: rel,
     });
     save_index(&root, &index)?;

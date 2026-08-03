@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://complai.dev/schemas/ingest-v1.schema.json",
+  "title": "Complai ingest bundle v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "records"],
+  "properties": {
+    "schema_version": { "const": "complai.ingest/v1" },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/record" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" },
+    "confidence": { "enum": ["high", "medium", "low"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "title", "reference", "locator"],
+      "properties": {
+        "type": { "$ref": "#/$defs/nonEmptyString" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "reference": { "$ref": "#/$defs/nonEmptyString" },
+        "locator": { "$ref": "#/$defs/nonEmptyString" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "document_date": { "type": "string", "format": "date" }
+      }
+    },
+    "common": {
+      "type": "object",
+      "required": ["external_key", "source", "confidence"],
+      "properties": {
+        "external_key": { "$ref": "#/$defs/nonEmptyString" },
+        "source": { "$ref": "#/$defs/source" },
+        "confidence": { "$ref": "#/$defs/confidence" }
+      }
+    },
+    "record": {
+      "oneOf": [
+        { "$ref": "#/$defs/controlContentRecord" },
+        { "$ref": "#/$defs/systemFactRecord" },
+        { "$ref": "#/$defs/projectFactRecord" },
+        { "$ref": "#/$defs/matrixAssessmentRecord" }
+      ]
+    },
+    "controlContentRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "external_key", "source", "confidence", "target", "content"],
+          "properties": {
+            "kind": { "const": "control_content" },
+            "external_key": true,
+            "source": true,
+            "confidence": true,
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["control"],
+              "properties": { "control": { "$ref": "#/$defs/nonEmptyString" } }
+            },
+            "content": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["completeness"],
+              "properties": {
+                "requirement_summary": { "$ref": "#/$defs/nonEmptyString" },
+                "implementation_guidance": { "$ref": "#/$defs/nonEmptyString" },
+                "common_deficiencies": { "$ref": "#/$defs/nonEmptyString" },
+                "expected_evidence": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/nonEmptyString" },
+                  "uniqueItems": true
+                },
+                "completeness": { "enum": ["partial", "complete"] }
+              },
+              "anyOf": [
+                { "required": ["requirement_summary"] },
+                { "required": ["implementation_guidance"] },
+                { "required": ["common_deficiencies"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "systemFactRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "external_key", "source", "confidence", "target", "content"],
+          "properties": {
+            "kind": { "const": "system_fact" },
+            "external_key": true,
+            "source": true,
+            "confidence": true,
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["system"],
+              "properties": { "system": { "$ref": "#/$defs/nonEmptyString" } }
+            },
+            "content": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["domain", "title", "body"],
+              "properties": {
+                "domain": { "$ref": "#/$defs/nonEmptyString" },
+                "title": { "$ref": "#/$defs/nonEmptyString" },
+                "body": { "$ref": "#/$defs/nonEmptyString" },
+                "tags": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+                "related_controls": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "projectFactRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "external_key", "source", "confidence", "target", "content"],
+          "properties": {
+            "kind": { "const": "project_fact" },
+            "external_key": true,
+            "source": true,
+            "confidence": true,
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["project"],
+              "properties": { "project": { "$ref": "#/$defs/nonEmptyString" } }
+            },
+            "content": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type", "title", "body"],
+              "properties": {
+                "type": { "enum": ["整改", "例外", "决策", "发现", "备注"] },
+                "title": { "$ref": "#/$defs/nonEmptyString" },
+                "body": { "$ref": "#/$defs/nonEmptyString" },
+                "tags": { "type": "array", "items": { "$ref": "#/$defs/nonEmptyString" }, "uniqueItems": true },
+                "control": { "$ref": "#/$defs/nonEmptyString" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "matrixAssessmentRecord": {
+      "allOf": [
+        { "$ref": "#/$defs/common" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "external_key", "source", "confidence", "target", "content"],
+          "properties": {
+            "kind": { "const": "matrix_assessment" },
+            "external_key": true,
+            "source": true,
+            "confidence": true,
+            "target": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["project", "control"],
+              "properties": {
+                "project": { "$ref": "#/$defs/nonEmptyString" },
+                "control": { "$ref": "#/$defs/nonEmptyString" }
+              }
+            },
+            "content": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status"],
+              "properties": {
+                "status": { "enum": ["met", "partial", "gap", "na"] },
+                "gap": { "$ref": "#/$defs/nonEmptyString" },
+                "remediation": { "$ref": "#/$defs/nonEmptyString" },
+                "owner": { "$ref": "#/$defs/nonEmptyString" }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

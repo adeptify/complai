@@ -8,11 +8,10 @@ use std::collections::BTreeMap;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{ControlId, Domain, Framework};
+use crate::model::{ControlId, Domain, Framework, IngestMetadata};
 
 /// 知识库摘录状态:控制项正文是否已手工填充。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ExcerptStatus {
     #[serde(rename = "empty")]
     #[default]
@@ -22,7 +21,6 @@ pub enum ExcerptStatus {
     #[serde(rename = "complete")]
     Complete,
 }
-
 
 impl ExcerptStatus {
     pub fn as_str(&self) -> &'static str {
@@ -62,6 +60,9 @@ pub struct ControlFrontmatter {
     pub excerpt_status: ExcerptStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_reviewed: Option<NaiveDate>,
+    /// 最近一次结构化导入的来源。手工维护或旧版控制项可以没有该字段。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ingest: Option<IngestMetadata>,
 }
 
 /// 一个完整的控制项:frontmatter + Markdown 正文。

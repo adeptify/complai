@@ -10,7 +10,7 @@
 
 ```sh
 cargo build
-cargo test                 # 22 个测试:单元 + 集成 + insta 快照
+cargo test                 # 单元 + 集成 + insta 快照
 cargo clippy --all-targets # 无警告
 ```
 
@@ -30,27 +30,33 @@ cargo install complai --locked
 ```sh
 # 通用知识库(共享,一次性)
 complai compliance scaffold dengbao-2.0              # -> compliance/dengbao-2.0/(70 控制桩)
-complai compliance ingest dengbao-2.0 notes.md       # 批量摘录(@@ <id> 分块)填控制正文
 complai compliance list --framework dengbao-2.0
 
 complai system init order-platform --name 订单平台   # -> system/order-platform/(共享)
-complai system add --system order-platform --domain 架构 \
-  --title "微服务拓扑" --control dengbao-2.0:8.1.2 --body "..."
-complai system ingest --from facts.yaml --system order-platform   # 批量灌系统事实
 
 # 项目(绑定 system × framework)
 complai project init order-platform-dengbao3 --system order-platform --framework dengbao-2.0 --level 3
 cd order-platform-dengbao3
-complai fact add --kind 整改 --title "payment-service 接入 MFA" \
-  --control dengbao-2.0:8.1.4.1 --body "负责人张三,计划 Q3。"
-complai matrix set dengbao-2.0:8.1.4.1 gap --gap "未启用多因素" --owner 张三
+
+# Agent 从 Excel/PDF/Word/图片/云文档抽取后生成统一 JSON bundle
+complai ingest schema
+complai ingest validate --from tmp/complai-ingest.json
+complai ingest plan --from tmp/complai-ingest.json
+complai ingest apply --from tmp/complai-ingest.json
+
 complai matrix link dengbao-2.0:8.1.4.1 --fact SYS-F-0001 --project-fact PROJ-F-0001
 complai evidence add mfa.png --control dengbao-2.0:8.1.4.1 --type config
 complai matrix trace dengbao-2.0:8.1.4.1   # 跨三层:控制正文+系统事实+项目事实+证据
 complai gen report                         # -> drafts/compliance-report.md
 ```
 
-`complai parse <file>.xlsx` 抽 Excel 为 Markdown 表格,供 agent 灌库。
+原始材料不要求 Complai 专用格式。Agent 使用当前环境可用的 PDF、文档、表格、
+OCR、Connector 或浏览器能力读取内容，再按 `complai ingest schema` 生成受控 JSON。
+CLI 负责协议与目标校验、变更预览、幂等写入以及来源追踪。
+
+`0.3.0` 起不再提供 `complai parse`、`compliance ingest`、`system ingest`，
+也不再接受 `facts.yaml` 或 `notes.md`；所有 Agent 批量写入统一使用版本化 JSON
+bundle。少量人工维护仍可使用 `system add`、`fact add` 和 `matrix set/link`。
 
 ## Agent skills
 
@@ -92,7 +98,7 @@ npx skills remove complai        # 全局安装时增加 --global
 当前内置 workflow:
 
 - `project-init`:立项并绑定系统与框架。
-- `doc-ingest`:把 Excel 等材料灌入知识库或矩阵。
+- `doc-ingest`:从任意可访问材料抽取并统一灌入知识库或矩阵。
 - `gap-analysis`:逐控制项分析差距并生成报告。
 
 新增或修改 workflow 时,编辑 `src/skills_content/<name>/SKILL.md` 并注册到
@@ -102,6 +108,7 @@ npx skills remove complai        # 全局安装时增加 --global
 ## 备注
 
 - 内置 `data/dengbao-2.0.yaml` 控制点编号/短名按 GB/T 22239-2019 三级填(只含 ID+短名,
-  不含标准要求正文;正文需手工摘录以规避版权)。正式使用前请核对。
+  不含标准要求正文；正文须由 Agent 从用户有权使用的材料中抽取并用自己的话概述)。
+  正式使用前请核对。
 - `gen` 是 Rust 2024 保留关键字,报告模块命名为 `reports`。
 - 文件模板与初始化清单见 [docs/file-templates.md](docs/file-templates.md)。

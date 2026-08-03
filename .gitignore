@@ -1,2 +1,32 @@
+# ---- Build artifacts ----
 /target
+
+# ---- Project-local scratch ----
+# Per project convention, `tmp/` holds intermediate files and comparison
+# artifacts (see ~/.claude/CLAUDE.md). Never commit.
 /tmp
+
+# ---- Local engineering notes ----
+# SESSION.md is a local scratchpad of deferred issues / TODOs (per project
+# convention); not meant for publication.
+/SESSION.md
+
+# ---- Agent / tooling local state ----
+# Claude Code per-user settings (permissions, allowlists) — local only.
+/.claude
+
+# ---- Test artifacts ----
+# Pending insta snapshots written by `cargo insta test` before review.
+*.snap.new
+
+# ---- Rustfmt backups ----
+*.rs.bk
+
+# ---- OS ----
+.DS_Store
+
+# ---- Editors / IDEs ----
+.idea/
+.vscode/
+*.swp
+*~

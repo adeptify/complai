@@ -1,7 +1,7 @@
 # complai
 
-合规审计 agent:Rust CLI (`complai`) + Claude Code skill。面向公司内合规工程师(准备方),
-做等保 2.0 等资质的差距分析、证据收集与报告生成。
+合规审计 agent:Rust CLI (`complai`) + 跨客户端 Agent Skill。面向公司内合规工程师
+(准备方),做等保 2.0 等资质的差距分析、证据收集与报告生成。
 
 架构(共享 KB 分 `compliance`+`system`;项目=系统×框架绑定+项目事实+artifacts)详见
 [PLAN.md](PLAN.md)。
@@ -60,13 +60,34 @@ complai gen report                         # -> drafts/compliance-report.md
 skill 缓存与 CLI 版本漂移。完整分层、description 和维护约定见
 [`skills/SKILLS.md`](skills/SKILLS.md)。
 
-从 crates.io 安装 CLI 后,按需发现和获取工作流:
+CLI 与 Agent Skill 分别安装：Cargo 管理包含实际 workflow 的二进制，
+[`npx skills`](https://github.com/vercel-labs/skills) 管理各 Agent 客户端中的轻量
+discovery skill。只使用 CLI 不需要 Node.js；安装 Agent Skill 时需要 Node.js/npm
+提供的 `npx`。
 
 ```sh
 cargo install complai --locked
+npx skills add adeptify/complai --skill complai
+
 complai skill list
 complai skill get project-init
 ```
+
+`npx skills` 默认安装到当前项目。全局安装到 Codex、从本地 checkout 开发安装，
+以及后续管理可分别使用：
+
+```sh
+npx skills add adeptify/complai --skill complai --agent codex --global --yes
+npx skills add ./skills/complai --agent codex
+npx skills list
+npx skills update complai        # 全局安装时增加 --global
+npx skills remove complai        # 全局安装时增加 --global
+```
+
+`npx skills update` 只更新 discovery skill；升级 CLI 仍运行
+`cargo install complai --locked`，以便内置 workflow 与二进制版本保持一致。
+项目级安装会在使用方项目生成 `skills-lock.json`，应与该项目一同提交，以便后续
+`list`、`update` 和 `remove` 使用同一来源。
 
 当前内置 workflow:
 
@@ -76,6 +97,7 @@ complai skill get project-init
 
 新增或修改 workflow 时,编辑 `src/skills_content/<name>/SKILL.md` 并注册到
 `src/skill.rs`;顶层 `skills/` 只保留 `complai` discovery skill。
+发布前运行 `scripts/check-agent-skills.sh`，确保 `npx skills` 默认只发现该入口。
 
 ## 备注
 

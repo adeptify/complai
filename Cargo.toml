@@ -13,6 +13,7 @@ include = [
     "src/**",
     "data/**",
     "skills/**",
+    "scripts/**",
     "templates/**",
     "docs/**",
     "tests/**",

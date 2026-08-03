@@ -1,0 +1,44 @@
+name: Agent Skills
+
+on:
+  push:
+    paths:
+      - ".github/workflows/agent-skills.yml"
+      - "scripts/check-agent-skills.sh"
+      - "skills/**"
+      - "src/skills_content/**"
+  pull_request:
+    paths:
+      - ".github/workflows/agent-skills.yml"
+      - "scripts/check-agent-skills.sh"
+      - "skills/**"
+      - "src/skills_content/**"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check validation script
+        run: shellcheck scripts/check-agent-skills.sh
+
+      - name: Validate Agent Skill discovery
+        run: scripts/check-agent-skills.sh
+
+      # A main-branch push has already published its Git objects, so this check
+      # exercises the same GitHub shorthand documented for end users.
+      - name: Validate public GitHub discovery
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          SKILLS_SOURCE: adeptify/complai
+        run: scripts/check-agent-skills.sh

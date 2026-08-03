@@ -24,11 +24,41 @@ Complai 采用「一个 discovery skill + CLI 内置 workflow」的分发模式�
 
 ## 安装与发现
 
+CLI 和 discovery skill 分别管理：Cargo 安装包含实际 workflow 的二进制，
+`npx skills` 把轻量入口安装到支持的 Agent 客户端。不要把 `npx skills update`
+当作 CLI 升级命令。只使用 CLI 不需要 Node.js；安装 discovery skill 时需要
+Node.js/npm 提供的 `npx`。
+
 ```sh
 cargo install complai --locked
+npx skills add adeptify/complai --skill complai
+
 complai skill list
 complai skill get project-init
 ```
+
+默认安装到当前项目；全局安装并指定 Codex 时使用：
+
+```sh
+npx skills add adeptify/complai --skill complai --agent codex --global --yes
+```
+
+从本地 checkout 安装可用于开发验证：
+
+```sh
+npx skills add ./skills/complai --agent codex
+```
+
+已安装 discovery skill 的查询、更新和移除：
+
+```sh
+npx skills list
+npx skills update complai
+npx skills remove complai
+```
+
+全局安装的 skill 在更新或移除时增加 `--global`。升级 CLI 仍运行
+`cargo install complai --locked`。
 
 ## 维护约定
 
@@ -38,4 +68,8 @@ complai skill get project-init
 3. 在 `src/skill.rs` 注册名称、紧凑摘要和 `include_str!` 路径。
 4. 每个 frontmatter description 都要同时说明能力和触发场景；面向人的紧凑说明
    维护在上表与 CLI registry 中。
-5. 发布前验证 `complai skill list/get`、测试、Clippy 和 `cargo package`。
+5. 发布前运行 `scripts/check-agent-skills.sh`，确认 `npx skills` 只发现
+   `complai`，再验证 `complai skill list/get`、测试、Clippy 和 `cargo package`。
+6. 合并到公开仓库 `main` 后，用
+   `SKILLS_SOURCE=adeptify/complai scripts/check-agent-skills.sh` 验证 GitHub 分发结果；
+   CI 会在 `main` 的 push 事件中自动执行这一步。

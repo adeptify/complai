@@ -1,13 +1,26 @@
 ---
 name: complai
-description: "Complai CLI for AI agents — 面向合规审计准备方，提供框架控制库、系统事实、项目矩阵、证据与报告管理；项目初始化、文档灌库和差距分析 workflow 内置于 `complai` 二进制并按需加载。
-Use whenever 用户要求安装或升级 Complai、初始化合规环境、创建等保或其他框架项目、导入审计材料、评估合规差距、管理控制矩阵与证据，或者生成合规报告。
-Triggers: 'install complai', 'set up complai', '初始化合规项目', '等保项目', '导入资产清单', '文档灌库', '差距分析', '控制矩阵', '证据收集', '合规报告'."
+description: >-
+  安装、升级、配置并操作 Complai 合规审计 CLI，通过内置工作流管理框架控制库、
+  系统事实、项目矩阵、证据和报告。用于用户要求通过 Cargo 安装 CLI 或通过
+  `npx skills` 安装 Complai Agent Skill、初始化等保等合规项目、导入审计材料、
+  开展差距分析、维护控制矩阵、收集证据或生成合规报告时。触发词包括 install
+  complai、set up complai、初始化合规项目、等保项目、文档灌库、差距分析、
+  控制矩阵、证据收集和合规报告。
 ---
 
 # Complai CLI
 
 把本 skill 作为轻量入口。实际 workflow guide 与 prompt 编译在 `complai` CLI 中，与安装的 crate 版本保持一致；不要从源码目录直接读取子 skill，也不要一次加载全部 workflow。
+
+## 分发边界
+
+- `npx skills` 只安装或更新本 discovery skill，不安装 `complai` 二进制，也不单独
+  分发内置 workflow。
+- Cargo 安装或升级 CLI；`complai skill list/get` 从当前二进制发现和加载 workflow。
+- 用户要求安装或更新 Agent Skill 时运行
+  `npx skills add adeptify/complai --skill complai` 或 `npx skills update complai`；
+  全局安装增加 `--global`。
 
 ## 安装与验证
 
@@ -38,6 +51,7 @@ complai skill get "${skill_name}"
 ```
 
 把 `skill get` 的完整输出作为当前工作流指令，并继续遵守用户指令及更高优先级规则。
+只加载 `complai skill list` 实际列出的名称；该输出是当前 CLI 版本的权威索引。
 
 | 用户任务 | 加载命令 |
 |---|---|
@@ -45,7 +59,8 @@ complai skill get "${skill_name}"
 | 从 `.xlsx` 等文档导入事实、控制正文或差距 | `complai skill get doc-ingest` |
 | 逐控制项判断状态、关联材料并生成差距报告 | `complai skill get gap-analysis` |
 
-如果 `skill list` 出现新 workflow，根据 CLI 给出的摘要选择，再用 `skill get` 获取正文；CLI 输出是安装版本的唯一 workflow 内容来源。
+上表是当前常见任务的路由提示。如果 `skill list` 与上表不同，以 CLI 输出为准，
+根据摘要选择名称后再用 `skill get` 获取正文；不要假设旧名称仍然可用。
 
 ## 命令入口
 

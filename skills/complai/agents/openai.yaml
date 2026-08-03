@@ -1,4 +1,4 @@
 interface:
   display_name: "Complai 合规审计"
   short_description: "安装、配置并通过 CLI 按需加载 Complai 合规审计工作流"
-  default_prompt: "使用 $complai 从 crates.io 安装 CLI，并按任务加载内置合规审计工作流。"
+  default_prompt: "使用 $complai 检查 Complai CLI 是否可用，按需安装，并加载匹配当前任务的内置合规审计工作流。"

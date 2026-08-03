@@ -19,7 +19,8 @@ pub struct ProjectMeta {
     pub name: String,
     pub system: String,
     pub framework: String,
-    pub level: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u8>,
 }
 
 /// 从 cwd 上溯找含 `project.yaml` 的目录(或 `COMPLAI_PROJECT_DIR`)。
@@ -54,42 +55,79 @@ pub fn load_meta(root: &Path) -> eyre::Result<ProjectMeta> {
 
 /// 当前项目引用的 system slug(供 system 命令默认、matrix trace 用)。
 pub fn current_system_slug() -> eyre::Result<String> {
-    let root = project_root()?;
-    Ok(load_meta(&root)?.system)
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    Ok(load_meta(&root).wrap_err("加载当前项目元数据失败")?.system)
 }
 
 pub fn run_project(cmd: ProjectCommand) -> eyre::Result<()> {
     match cmd {
-        ProjectCommand::Init { name, system, framework, level } => {
-            init::init(&name, &system, &framework, level)
-        }
+        ProjectCommand::Init {
+            name,
+            system,
+            framework,
+            level,
+        } => init::init(&name, &system, &framework, level),
+        ProjectCommand::Show => show(),
     }
+}
+
+/// 给 agent 提供一个紧凑的项目路由包，避免 workflow 直接解析 `project.yaml`。
+pub fn show() -> eyre::Result<()> {
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let metadata = load_meta(&root).wrap_err("加载当前项目元数据失败")?;
+    println!("name\t{}", metadata.name);
+    println!("system\t{}", metadata.system);
+    println!("framework\t{}", metadata.framework);
+    println!(
+        "level\t{}",
+        metadata
+            .level
+            .map_or_else(|| "-".to_string(), |level| level.to_string())
+    );
+    Ok(())
 }
 
 pub fn run_matrix(cmd: MatrixCommand) -> eyre::Result<()> {
     match cmd {
         MatrixCommand::Show { status } => matrix::show(status.as_deref()),
-        MatrixCommand::Set { control, status, gap, owner } => {
-            matrix::set(&control, &status, gap, owner)
-        }
-        MatrixCommand::Link { control, evidence, fact, project_fact } => {
-            matrix::link(&control, evidence, fact, project_fact)
-        }
+        MatrixCommand::Set {
+            control,
+            status,
+            gap,
+            owner,
+        } => matrix::set(&control, &status, gap, owner),
+        MatrixCommand::Link {
+            control,
+            evidence,
+            fact,
+            project_fact,
+        } => matrix::link(&control, evidence, fact, project_fact),
         MatrixCommand::Trace { control } => matrix::trace(&control),
     }
 }
 
 pub fn run_evidence(cmd: EvidenceCommand) -> eyre::Result<()> {
     match cmd {
-        EvidenceCommand::Add { file, control, kind, description } => {
-            evidence::add(&file, &control, kind, description)
-        }
+        EvidenceCommand::Add {
+            file,
+            control,
+            kind,
+            description,
+        } => evidence::add(&file, &control, kind, description),
+        EvidenceCommand::List => evidence::list(),
+        EvidenceCommand::Show { id } => evidence::show(&id),
+        EvidenceCommand::Find { control } => evidence::find(&control),
     }
 }
 
 pub fn run_fact(cmd: FactCommand) -> eyre::Result<()> {
     match cmd {
-        FactCommand::Add { kind, title, control, body } => fact::add(kind, title, control, body),
+        FactCommand::Add {
+            kind,
+            title,
+            control,
+            body,
+        } => fact::add(kind, title, control, body),
         FactCommand::Show { id } => fact::show(&id),
         FactCommand::Find { control } => fact::find(&control),
     }

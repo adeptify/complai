@@ -3,9 +3,11 @@ name: complai
 description: >-
   安装、升级、配置并操作 Complai 合规审计 CLI，通过内置工作流管理框架控制库、
   系统事实、项目矩阵、证据和报告。用于用户要求通过 Cargo 安装 CLI 或通过
-  `npx skills` 安装 Complai Agent Skill、初始化等保等合规项目、导入审计材料、
+  `npx skills` 安装 Complai Agent Skill、初始化等保、ISO、NIST、SOC 2、PCI DSS
+  或其他合规项目、导入审计材料、
   开展差距分析、维护控制矩阵、收集证据或生成合规报告时。触发词包括 install
-  complai、set up complai、初始化合规项目、等保项目、文档灌库、差距分析、
+  complai、set up complai、初始化合规项目、ISO 27001、NIST、SOC 2、PCI DSS、
+  等保项目、文档灌库、差距分析、
   控制矩阵、证据收集和合规报告。
 ---
 
@@ -37,7 +39,10 @@ complai --version
 
 - 共享知识库默认位于 `~/.complai/kb`。仅在用户指定其他位置时设置 `COMPLAI_KB_DIR`。
 - 进入包含 `project.yaml` 的项目目录工作；只有无法进入该目录时才为当前任务设置 `COMPLAI_PROJECT_DIR`。
-- 先运行 `complai compliance list --framework dengbao-2.0` 检查框架库。仅在尚未初始化时运行 `complai compliance scaffold dengbao-2.0`。
+- 已进入项目时先运行 `complai project show` 确认框架和系统；新建项目时由
+  `project-init` workflow 确认这些信息。
+- 使用 `complai compliance list --framework <框架>` 检查框架库。等保 2.0 可用
+  `compliance scaffold`；其他框架通过 `doc-ingest` workflow 从用户有权使用的规范材料创建。
 - 控制正文必须来自用户有权使用的材料；不能臆造标准原文。
 
 ## 按需加载工作流
@@ -71,7 +76,7 @@ complai system --help      # 跨项目共享的系统事实
 complai project --help     # 项目初始化
 complai fact --help        # 项目专属事实
 complai matrix --help      # 控制矩阵与最小上下文追踪
-complai evidence --help    # 证据登记
+complai evidence --help    # 证据登记与查询
 complai gen --help         # 报告生成
 ```
 
@@ -84,4 +89,5 @@ complai gen --help         # 报告生成
 - 批量抽取只使用统一 ingest bundle；先获取 `ingest schema`，再依次运行
   `ingest validate` 和 `ingest plan`，确认计划后才 `ingest apply`。
 - 缺少框架正文、系统事实、证据或用户决策时明确指出，不要补造。
-- 项目名、系统 slug、框架、等级、状态和抽取映射按已加载 workflow 的确认规则处理。
+- 项目名、系统 slug、框架、可选级别、状态和抽取映射按已加载 workflow 的确认规则处理。
+- 矩阵初始状态为 `unassessed`；只有经评估确认不适用时才使用 `na`。

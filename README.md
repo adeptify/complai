@@ -126,7 +126,7 @@ complai skill get project-init
 > 使用 Complai 为“订单平台”创建等保 2.0 三级评估项目。系统 slug 使用
 > `order-platform`，项目名使用 `order-platform-dengbao3`。
 
-Agent 会加载 `project-init`，确认系统、框架、等级和项目名，然后执行：
+Agent 会加载 `project-init`，确认系统、框架、项目名和框架可选级别，然后执行：
 
 ```sh
 complai compliance scaffold dengbao-2.0
@@ -152,6 +152,7 @@ Agent 会加载 `doc-ingest`，使用合适的工具读取材料，生成
 complai ingest schema
 complai ingest validate --from tmp/complai-ingest.json
 complai ingest plan --from tmp/complai-ingest.json
+# 检查 plan 后才执行：
 complai ingest apply --from tmp/complai-ingest.json
 ```
 
@@ -163,6 +164,9 @@ complai ingest apply --from tmp/complai-ingest.json
 | `system_fact` | 共享业务系统 KB | 架构、资产、数据流、部署材料 |
 | `project_fact` | 当前评估项目 | 发现、整改、例外、决策 |
 | `matrix_assessment` | 当前控制矩阵 | 测评结论和缺口 |
+
+导入 ISO、NIST、SOC 2、PCI DSS 等尚未入库的框架时，在 `control_content`
+中同时提供 `title`、`domain` 和 `category`，Complai 会创建控制项并自动建立索引。
 
 低置信度记录默认拒绝写入；只有用户复核确认后，才能使用
 `--allow-low-confidence`。
@@ -179,15 +183,17 @@ Agent 会加载 `gap-analysis`，按控制项读取最小必要上下文：
 ```sh
 complai compliance show dengbao-2.0:8.1.4.1
 complai system find --control dengbao-2.0:8.1.4.1
+complai fact find --control dengbao-2.0:8.1.4.1
+complai evidence find --control dengbao-2.0:8.1.4.1
 complai matrix trace dengbao-2.0:8.1.4.1
-
-complai matrix set dengbao-2.0:8.1.4.1 gap \
-  --gap "运维登录未启用多因素认证" \
-  --owner "安全负责人"
 
 complai evidence add mfa-login.png \
   --control dengbao-2.0:8.1.4.1 \
   --type screenshot
+complai matrix link dengbao-2.0:8.1.4.1 --evidence EV-0001
+complai matrix set dengbao-2.0:8.1.4.1 gap \
+  --gap "运维登录未启用多因素认证" \
+  --owner "安全负责人"
 
 complai gen report
 ```
@@ -201,17 +207,17 @@ complai gen report
 | 合规框架 KB | 共享控制项、要求摘要和实施指引 | `compliance scaffold/list/show/build` |
 | 业务系统 KB | 复用架构、资产、数据流和策略事实 | `system init/add/find/show` |
 | 统一 ingest | 严格、可追溯、幂等的 Agent 批量写入 | `ingest schema/validate/plan/apply` |
-| 评估项目 | 绑定一个系统、框架和等级 | `project init` |
+| 评估项目 | 绑定一个系统、框架和可选级别 | `project init/show` |
 | 控制矩阵 | 状态、缺口、负责人、事实和证据引用 | `matrix show/set/link/trace` |
 | 项目事实 | 发现、整改、例外、决策和备注 | `fact add/find/show` |
-| 证据管理 | 复制、哈希、分类并关联证据 | `evidence add` |
+| 证据管理 | 复制、哈希、分类、查询并关联证据 | `evidence add/list/find/show` |
 | 报告生成 | 生成当前合规差距报告 | `gen report` |
 
 ## 内置 Agent 工作流
 
 | 工作流 | 适用任务 |
 |---|---|
-| `project-init` | 确认系统、框架、等级并初始化项目 |
+| `project-init` | 确认系统、框架和可选级别并初始化项目 |
 | `doc-ingest` | 读取任意可访问来源并生成受控 ingest bundle |
 | `gap-analysis` | 评估控制项、关联事实与证据并生成报告 |
 
@@ -232,7 +238,8 @@ complai skill get doc-ingest
 ~/.complai/kb/
 ├── compliance/<framework>/
 │   ├── index.yaml
-│   └── 技术|管理/<category>/<control-id>.md
+│   ├── <framework-specific-path>/<control-id>.md
+│   └── controls/<safe-control-id>.md
 └── system/<slug>/
     ├── index.yaml
     └── <domain>/SYS-F-NNNN.md

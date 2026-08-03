@@ -70,6 +70,19 @@
               "additionalProperties": false,
               "required": ["completeness"],
               "properties": {
+                "title": { "$ref": "#/$defs/nonEmptyString" },
+                "domain": { "$ref": "#/$defs/nonEmptyString" },
+                "category": { "$ref": "#/$defs/nonEmptyString" },
+                "levels": {
+                  "type": "array",
+                  "items": { "type": "integer", "minimum": 1, "maximum": 255 },
+                  "uniqueItems": true
+                },
+                "tags": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/nonEmptyString" },
+                  "uniqueItems": true
+                },
                 "requirement_summary": { "$ref": "#/$defs/nonEmptyString" },
                 "implementation_guidance": { "$ref": "#/$defs/nonEmptyString" },
                 "common_deficiencies": { "$ref": "#/$defs/nonEmptyString" },
@@ -184,7 +197,7 @@
               "additionalProperties": false,
               "required": ["status"],
               "properties": {
-                "status": { "enum": ["met", "partial", "gap", "na"] },
+                "status": { "enum": ["unassessed", "met", "partial", "gap", "na"] },
                 "gap": { "$ref": "#/$defs/nonEmptyString" },
                 "remediation": { "$ref": "#/$defs/nonEmptyString" },
                 "owner": { "$ref": "#/$defs/nonEmptyString" }

@@ -25,22 +25,32 @@ complai ingest schema
 1. 读取材料并保留来源标识、文件哈希（可得时）、文档日期以及页码、工作表、
    单元格、章节或云文档块等定位信息。
 2. 按语义把内容拆成原子记录：
-   - `control_content`：权威规范中的要求摘要、实施指引和常见缺陷。
+   - `control_content`：权威规范中的控制元数据、要求摘要、实施指引和常见缺陷。
    - `system_fact`：可跨项目复用的架构、资产、数据流、部署、人员或策略事实。
    - `project_fact`：本次备案的发现、整改、例外、决策或备注。
-   - `matrix_assessment`：针对一个控制项的 `met/partial/gap/na` 结论。
+   - `matrix_assessment`：针对一个控制项的 `unassessed/met/partial/gap/na` 状态。
 3. 按 `complai ingest schema` 输出 `tmp/complai-ingest.json`。为每条记录生成稳定
    `external_key`，组合来源身份、定位和记录语义；不要使用会随正文改写而变化的
    随机值。
-4. 依次执行：
+   创建尚不存在的框架控制项时，在 `control_content` 中提供 `title`、`domain`
+   和 `category`；框架有级别概念时再提供 `levels`。目标 `control` 使用
+   `<framework>:<control-id>`，Complai 会创建控制文件并重建框架索引。
+4. **校验并预览**：
 
    ```sh
    complai ingest validate --from tmp/complai-ingest.json
    complai ingest plan --from tmp/complai-ingest.json
+   ```
+
+5. **检查计划**：确认 plan 中的 create/update/unchanged、记录数量和目标均符合预期。
+   发现误分类、意外覆盖或错误目标时，修正 bundle 并重新 validate/plan，不要 apply。
+6. **写入**：计划确认无误后运行：
+
+   ```sh
    complai ingest apply --from tmp/complai-ingest.json
    ```
 
-5. 检查 plan 中的 create/update/unchanged 和目标是否符合预期，再 apply。写入后用
+7. **抽查**：写入后用
    `compliance show`、`system find/show`、`fact find/show` 或 `matrix show/trace`
    抽查结果。
 
@@ -52,6 +62,8 @@ complai ingest schema
   `control_content`。
 - `control_content.completeness=complete` 仅在三个正文段落均有可靠来源时使用；
   缺失内容保持 `partial`，不要补造。
+- `unassessed` 只表示尚未评估；`partial`、`gap` 和 `na` 必须在 `gap` 字段说明
+  缺口或不适用理由，`met` 不应携带 `gap`。
 - 每条记录必须带精确来源定位和置信度。低置信度记录默认不能 apply；只有用户审阅
   并明确确认后才使用 `--allow-low-confidence`。
 - 控制正文使用自己的话概述，不复录用户无权再分发的标准原文。

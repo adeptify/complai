@@ -159,9 +159,12 @@ pub enum ProjectCommand {
         system: String,
         #[arg(long)]
         framework: String,
-        #[arg(long, default_value_t = 3)]
-        level: u8,
+        /// 框架定义了级别时指定，例如等保三级
+        #[arg(long)]
+        level: Option<u8>,
     },
+    /// 显示当前项目绑定的系统、框架和可选级别
+    Show,
 }
 
 #[derive(Subcommand, Debug)]
@@ -196,7 +199,9 @@ pub enum MatrixCommand {
     /// 设置控制项状态
     Set {
         control: String,
+        /// unassessed/met/partial/gap/na
         status: String,
+        /// partial/gap 的缺口，或 na 的不适用理由
         #[arg(long)]
         gap: Option<String>,
         #[arg(long)]
@@ -227,6 +232,15 @@ pub enum EvidenceCommand {
         kind: String,
         #[arg(long)]
         description: Option<String>,
+    },
+    /// 列出项目中的全部证据
+    List,
+    /// 显示一条证据的详细信息
+    Show { id: String },
+    /// 查找关联到某个控制项的证据
+    Find {
+        #[arg(long)]
+        control: String,
     },
 }
 

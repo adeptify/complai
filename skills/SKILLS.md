@@ -18,7 +18,7 @@ Complai 采用「一个 discovery skill + CLI 内置 workflow」的分发模式�
 | 名称 | 类型 | Description | 获取方式 |
 |---|---|---|---|
 | `complai` | Discovery | 安装、配置并操作 CLI，根据用户任务发现和加载内置 workflow | 安装 `skills/complai/` |
-| `project-init` | Workflow | 创建合规项目并绑定系统、框架与等级 | `complai skill get project-init` |
+| `project-init` | Workflow | 创建合规项目并绑定系统、框架与可选级别 | `complai skill get project-init` |
 | `doc-ingest` | Workflow | 从任意可访问材料抽取并统一导入事实、控制正文或矩阵 | `complai skill get doc-ingest` |
 | `gap-analysis` | Workflow | 基于控制、事实与证据评估差距并生成报告 | `complai skill get gap-analysis` |
 

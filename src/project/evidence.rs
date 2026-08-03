@@ -37,9 +37,9 @@ impl EvidenceType {
             "policy-doc" => Ok(Self::PolicyDoc),
             "log" => Ok(Self::Log),
             "record" => Ok(Self::Record),
-            other => eyre::bail!(
-                "未知证据类型 `{other}`(应为 screenshot/config/policy-doc/log/record)"
-            ),
+            other => {
+                eyre::bail!("未知证据类型 `{other}`(应为 screenshot/config/policy-doc/log/record)")
+            }
         }
     }
 
@@ -114,20 +114,21 @@ pub fn add(
     let cid: ControlId = control_str
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
-    let root = project_root()?;
+    let root = project_root().wrap_err("定位当前项目失败")?;
 
-    let bytes = fs::read(file_path)
-        .wrap_err_with(|| format!("读取证据文件 {file_path} 失败"))?;
+    let bytes = fs::read(file_path).wrap_err_with(|| format!("读取证据文件 {file_path} 失败"))?;
     let hash = sha2::Sha256::digest(&bytes);
     let sha: String = hash.iter().map(|b| format!("{:02x}", b)).collect();
-    let kind = EvidenceType::parse(&kind_str)?;
+    let kind = EvidenceType::parse(&kind_str).wrap_err("解析证据类型失败")?;
 
     let fname = Path::new(file_path)
         .file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| eyre::eyre!("证据文件路径无有效文件名:{file_path}"))?;
+        .ok_or_else(|| eyre::eyre!("证据文件路径无有效文件名:{file_path}"))
+        .wrap_err("定位证据文件名失败")?;
     // 按控制点就近存放;control_id(如 8.1.4.1)无冒号,可直接作子目录。
-    let rel = format!("evidence/{}/{}", cid.control_id, fname);
+    let control_directory = crate::paths::safe_path_component(&cid.control_id);
+    let rel = format!("evidence/{control_directory}/{fname}");
     let dest = root.join(&rel);
     if let Some(parent) = dest.parent() {
         fs::create_dir_all(parent)
@@ -135,7 +136,7 @@ pub fn add(
     }
     fs::write(&dest, &bytes).wrap_err_with(|| format!("写入证据副本 {} 失败", dest.display()))?;
 
-    let mut index = load_index(&root)?;
+    let mut index = load_index(&root).wrap_err("加载证据索引失败")?;
     let id = next_evidence_id(&index);
     let ev = Evidence {
         id: id.clone(),
@@ -149,8 +150,88 @@ pub fn add(
         linked_facts: Vec::new(),
     };
     index.evidence.insert(id.clone(), ev);
-    save_index(&root, &index)?;
+    save_index(&root, &index).wrap_err("保存证据索引失败")?;
 
     println!("added evidence {id} for {control_str}");
     Ok(())
+}
+
+pub fn list() -> eyre::Result<()> {
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let index = load_index(&root).wrap_err("加载证据索引失败")?;
+    for evidence in index.evidence.values() {
+        print_summary(evidence);
+    }
+    println!("\n{} evidence records", index.evidence.len());
+    Ok(())
+}
+
+pub fn show(id: &str) -> eyre::Result<()> {
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let index = load_index(&root).wrap_err("加载证据索引失败")?;
+    let evidence = index
+        .evidence
+        .get(id)
+        .ok_or_else(|| eyre::eyre!("证据 {id} 不存在"))
+        .wrap_err("定位证据失败")?;
+
+    println!("id\t{}", evidence.id);
+    println!("type\t{}", evidence.kind.as_str());
+    println!("file\t{}", evidence.file);
+    println!("sha256\t{}", evidence.sha256);
+    println!("collected_at\t{}", evidence.collected_at);
+    println!("collector\t{}", evidence.collector);
+    println!("description\t{}", display_or_dash(&evidence.description));
+    println!(
+        "controls\t{}",
+        if evidence.linked_controls.is_empty() {
+            "-".to_string()
+        } else {
+            evidence
+                .linked_controls
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    );
+    let linked_facts = if evidence.linked_facts.is_empty() {
+        "-".to_string()
+    } else {
+        evidence.linked_facts.join(", ")
+    };
+    println!("facts\t{linked_facts}");
+    Ok(())
+}
+
+pub fn find(control_str: &str) -> eyre::Result<()> {
+    let control: ControlId = control_str
+        .parse()
+        .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let index = load_index(&root).wrap_err("加载证据索引失败")?;
+    let matches = index
+        .evidence
+        .values()
+        .filter(|evidence| evidence.linked_controls.contains(&control))
+        .collect::<Vec<_>>();
+    for evidence in &matches {
+        print_summary(evidence);
+    }
+    println!("\n{} evidence records related to {control}", matches.len());
+    Ok(())
+}
+
+fn print_summary(evidence: &Evidence) {
+    println!(
+        "{}  [{}]  {}  {}",
+        evidence.id,
+        evidence.kind.as_str(),
+        evidence.file,
+        display_or_dash(&evidence.description)
+    );
+}
+
+fn display_or_dash(value: &str) -> &str {
+    if value.is_empty() { "-" } else { value }
 }

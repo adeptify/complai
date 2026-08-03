@@ -9,14 +9,19 @@ use eyre::WrapErr;
 
 use crate::compliance::control::ControlIndex;
 use crate::compliance::framework_dir;
-use crate::paths::kb_root;
 use crate::model::{ControlId, Domain};
+use crate::paths::kb_root;
 
 /// 加载某框架的索引(若不存在,提示先 build)。
 pub fn load_index(framework: &str) -> eyre::Result<ControlIndex> {
-    let path = framework_dir(framework)?.join("index.yaml");
+    let path = framework_dir(framework)
+        .wrap_err("解析合规框架目录失败")?
+        .join("index.yaml");
     let content = fs::read_to_string(&path).wrap_err_with(|| {
-        format!("索引不存在({});先运行 `complai compliance build {framework}`", path.display())
+        format!(
+            "索引不存在({});先通过 ingest 导入框架控制，或运行 `complai compliance build {framework}`",
+            path.display()
+        )
     })?;
     serde_yml::from_str(&content).wrap_err("解析索引失败")
 }
@@ -26,13 +31,14 @@ pub fn show(id_str: &str) -> eyre::Result<()> {
         .parse()
         .wrap_err_with(|| format!("`{id_str}` 不是合法控制 ID"))?;
     let framework = id.framework.as_str().to_string();
-    let dir = framework_dir(&framework)?;
-    let index = load_index(&framework)?;
+    let dir = framework_dir(&framework).wrap_err("解析合规框架目录失败")?;
+    let index = load_index(&framework).wrap_err("加载合规框架索引失败")?;
     let entry = index
         .controls
         .iter()
         .find(|e| e.id == id)
-        .ok_or_else(|| eyre::eyre!("控制 {id} 不在索引中"))?;
+        .ok_or_else(|| eyre::eyre!("控制 {id} 不在索引中"))
+        .wrap_err("定位控制失败")?;
 
     let content = fs::read_to_string(dir.join(&entry.file))
         .wrap_err_with(|| format!("读取 {} 失败", entry.file))?;
@@ -41,17 +47,18 @@ pub fn show(id_str: &str) -> eyre::Result<()> {
 }
 
 pub fn list(framework: Option<&str>, domain: Option<&str>) -> eyre::Result<()> {
-    let root = kb_root()?;
+    let root = kb_root().wrap_err("解析知识库根目录失败")?;
     if !root.exists() {
         eyre::bail!(
-            "知识库根目录不存在:{}(先运行 `complai compliance scaffold dengbao-2.0`)",
+            "知识库根目录不存在:{}(先通过 ingest 导入框架；等保 2.0 也可运行 `complai compliance scaffold dengbao-2.0`)",
             root.display()
         );
     }
 
     let frameworks: Vec<String> = match framework {
         Some(f) => vec![f.to_string()],
-        None => fs::read_dir(&root)?
+        None => fs::read_dir(&root)
+            .wrap_err("读取知识库根目录失败")?
             .filter_map(Result::ok)
             .filter(|e| e.path().is_dir())
             .map(|e| e.file_name().to_string_lossy().into_owned())
@@ -59,10 +66,7 @@ pub fn list(framework: Option<&str>, domain: Option<&str>) -> eyre::Result<()> {
     };
 
     let domain_filter = match domain {
-        Some(d) => Some(
-            Domain::from_str(d)
-                .wrap_err_with(|| format!("未知域 `{d}`(应为 技术/管理)"))?,
-        ),
+        Some(d) => Some(Domain::from_str(d).wrap_err_with(|| format!("控制域 `{d}` 无效"))?),
         None => None,
     };
 
@@ -77,10 +81,11 @@ pub fn list(framework: Option<&str>, domain: Option<&str>) -> eyre::Result<()> {
             }
         };
         for entry in &index.controls {
-            if let Some(d) = domain_filter
-                && entry.domain != d {
-                    continue;
-                }
+            if let Some(d) = &domain_filter
+                && &entry.domain != d
+            {
+                continue;
+            }
             println!(
                 "{}  {}  {}/{}  [{}]",
                 entry.id,

@@ -151,7 +151,11 @@ impl Ord for ControlId {
 
 /// 控制项在矩阵中的符合性状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub enum ControlStatus {
+    /// 尚未评估
+    #[serde(rename = "unassessed")]
+    Unassessed,
     /// 满足
     #[serde(rename = "met")]
     Met,
@@ -175,6 +179,7 @@ impl fmt::Display for ControlStatus {
 impl ControlStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Unassessed => "unassessed",
             Self::Met => "met",
             Self::Partial => "partial",
             Self::Gap => "gap",
@@ -188,34 +193,51 @@ impl FromStr for ControlStatus {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "unassessed" => Ok(Self::Unassessed),
             "met" => Ok(Self::Met),
             "partial" => Ok(Self::Partial),
             "gap" => Ok(Self::Gap),
             "na" => Ok(Self::Na),
             other => Err(eyre::eyre!(
-                "未知控制状态 `{other}`(应为 met/partial/gap/na)"
+                "未知控制状态 `{other}`(应为 unassessed/met/partial/gap/na)"
             )),
         }
     }
 }
 
-/// 等保控制域:技术要求 vs 管理要求。
+/// 框架内的控制域。
 ///
-/// 序列化为中文 `技术`/`管理`,与等保基本要求的两大类对应。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Domain {
-    #[serde(rename = "技术")]
-    Technical,
-    #[serde(rename = "管理")]
-    Management,
-}
+/// 控制域是框架自定义名称，例如等保的“技术”/“管理”、ISO 27001 的
+/// “Organizational controls”。使用新类型保留域语义，同时避免用枚举封死可用框架。
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Domain(String);
 
 impl Domain {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Technical => "技术",
-            Self::Management => "管理",
+    pub fn new(value: impl Into<String>) -> eyre::Result<Self> {
+        let value = value.into();
+        if value.trim().is_empty() {
+            return Err(eyre::eyre!("控制域不能为空"));
         }
+        Ok(Self(value))
+    }
+
+    pub fn technical() -> Self {
+        Self("技术".to_string())
+    }
+
+    pub fn management() -> Self {
+        Self("管理".to_string())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for Domain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -223,11 +245,7 @@ impl FromStr for Domain {
     type Err = eyre::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "技术" => Ok(Self::Technical),
-            "管理" => Ok(Self::Management),
-            other => Err(eyre::eyre!("未知控制域 `{other}`(应为 技术/管理)")),
-        }
+        Self::new(s)
     }
 }
 
@@ -339,8 +357,8 @@ mod tests {
 
     #[test]
     fn control_status_roundtrip() {
-        for s in ["met", "partial", "gap", "na"] {
-            let st: ControlStatus = s.parse().unwrap();
+        for s in ["unassessed", "met", "partial", "gap", "na"] {
+            let st: ControlStatus = s.parse().expect("测试状态有效");
             assert_eq!(st.to_string(), s);
         }
         assert!("bogus".parse::<ControlStatus>().is_err());
@@ -348,8 +366,14 @@ mod tests {
 
     #[test]
     fn domain_parse() {
-        assert_eq!(Domain::from_str("技术").unwrap(), Domain::Technical);
-        assert_eq!(Domain::from_str("管理").unwrap(), Domain::Management);
-        assert!(Domain::from_str("x").is_err());
+        assert_eq!(
+            Domain::from_str("技术").expect("等保域有效"),
+            Domain::technical()
+        );
+        assert_eq!(
+            Domain::from_str("Organizational controls").expect("ISO 域有效"),
+            Domain::new("Organizational controls").expect("ISO 域有效")
+        );
+        assert!(Domain::from_str("  ").is_err());
     }
 }

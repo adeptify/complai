@@ -148,8 +148,8 @@ say:
 > Use `order-platform` as the system slug and
 > `order-platform-dengbao3` as the project name.
 
-The agent loads `project-init`, confirms the system, framework, level, and
-project name, then runs:
+The agent loads `project-init`, confirms the system, framework, project name,
+and an optional framework level, then runs:
 
 ```sh
 complai compliance scaffold dengbao-2.0
@@ -176,6 +176,7 @@ generates `tmp/complai-ingest.json`, and runs:
 complai ingest schema
 complai ingest validate --from tmp/complai-ingest.json
 complai ingest plan --from tmp/complai-ingest.json
+# Run only after reviewing the plan:
 complai ingest apply --from tmp/complai-ingest.json
 ```
 
@@ -187,6 +188,10 @@ One bundle can contain four record types:
 | `system_fact` | Shared business system KB | Architecture, assets, data flows, deployment material |
 | `project_fact` | Current assessment project | Findings, remediation, exceptions, decisions |
 | `matrix_assessment` | Current control matrix | Assessment decisions and gaps |
+
+When importing a framework that is not in the KB yet, such as ISO, NIST,
+SOC 2, or PCI DSS, include `title`, `domain`, and `category` in each
+`control_content` record. Complai creates the controls and builds the index.
 
 Low-confidence records are rejected by default. Use
 `--allow-low-confidence` only after human review and confirmation.
@@ -204,15 +209,17 @@ control:
 ```sh
 complai compliance show dengbao-2.0:8.1.4.1
 complai system find --control dengbao-2.0:8.1.4.1
+complai fact find --control dengbao-2.0:8.1.4.1
+complai evidence find --control dengbao-2.0:8.1.4.1
 complai matrix trace dengbao-2.0:8.1.4.1
-
-complai matrix set dengbao-2.0:8.1.4.1 gap \
-  --gap "MFA is not enabled for operations access" \
-  --owner "Security Lead"
 
 complai evidence add mfa-login.png \
   --control dengbao-2.0:8.1.4.1 \
   --type screenshot
+complai matrix link dengbao-2.0:8.1.4.1 --evidence EV-0001
+complai matrix set dengbao-2.0:8.1.4.1 gap \
+  --gap "MFA is not enabled for operations access" \
+  --owner "Security Lead"
 
 complai gen report
 ```
@@ -226,17 +233,17 @@ The report is written to `drafts/compliance-report.md` inside the project.
 | Compliance framework KB | Share control definitions, requirement summaries, and implementation guidance | `compliance scaffold/list/show/build` |
 | Business system KB | Reuse architecture, asset, data-flow, and policy facts | `system init/add/find/show` |
 | Unified ingest | Strict, traceable, idempotent agent batch writes | `ingest schema/validate/plan/apply` |
-| Assessment projects | Bind one system, framework, and level | `project init` |
+| Assessment projects | Bind one system, framework, and optional level | `project init/show` |
 | Control matrix | Track status, gaps, owners, facts, and evidence references | `matrix show/set/link/trace` |
 | Project facts | Store findings, remediation, exceptions, decisions, and notes | `fact add/find/show` |
-| Evidence management | Copy, hash, classify, and link evidence | `evidence add` |
+| Evidence management | Copy, hash, classify, query, and link evidence | `evidence add/list/find/show` |
 | Report generation | Generate the current compliance gap report | `gen report` |
 
 ## Built-in agent workflows
 
 | Workflow | Use it for |
 |---|---|
-| `project-init` | Confirm the system, framework, and level, then initialize a project |
+| `project-init` | Confirm the system, framework, and optional level, then initialize a project |
 | `doc-ingest` | Read any accessible source and produce a controlled ingest bundle |
 | `gap-analysis` | Assess controls, link facts and evidence, and generate a report |
 
@@ -258,7 +265,8 @@ Shared knowledge is stored in `~/.complai/kb` by default:
 ~/.complai/kb/
 ├── compliance/<framework>/
 │   ├── index.yaml
-│   └── technical|management/<category>/<control-id>.md
+│   ├── <framework-specific-path>/<control-id>.md
+│   └── controls/<safe-control-id>.md
 └── system/<slug>/
     ├── index.yaml
     └── <domain>/SYS-F-NNNN.md

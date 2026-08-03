@@ -18,7 +18,8 @@ use crate::cli::IngestCommand;
 use crate::compliance::control::{ControlFrontmatter, ExcerptStatus};
 use crate::frontmatter;
 use crate::model::{
-    ControlId, ControlStatus, IngestConfidence, IngestMetadata, ProjectFactKind, SourceCitation,
+    ControlId, ControlStatus, Domain, IngestConfidence, IngestMetadata, ProjectFactKind,
+    SourceCitation,
 };
 use crate::project::fact::{ProjectFactFrontmatter, ProjectFactIndexEntry};
 use crate::system::fact::{
@@ -96,6 +97,20 @@ pub struct MatrixTarget {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ControlContent {
+    /// 新控制项的标题；更新已有控制项时可省略。
+    #[serde(default)]
+    pub title: Option<String>,
+    /// 新控制项所属的框架域；更新时可省略。
+    #[serde(default)]
+    pub domain: Option<Domain>,
+    /// 新控制项所属类别；更新时可省略。
+    #[serde(default)]
+    pub category: Option<String>,
+    /// 框架有等级概念时声明适用级别。
+    #[serde(default)]
+    pub levels: Option<Vec<u8>>,
+    #[serde(default)]
+    pub tags: Option<Vec<String>>,
     #[serde(default)]
     pub requirement_summary: Option<String>,
     #[serde(default)]
@@ -290,21 +305,42 @@ pub fn validate_bundle(bundle: &IngestBundle) -> eyre::Result<()> {
 /// 在不写文件的前提下校验所有目标，并计算每条记录的变更类型。
 pub fn plan_bundle(bundle: &IngestBundle) -> eyre::Result<Vec<PlanItem>> {
     validate_bundle(bundle).wrap_err("校验 ingest bundle 失败")?;
+    let planned_controls = bundle
+        .records
+        .iter()
+        .filter_map(|record| match record {
+            IngestRecord::ControlContent { target, .. } => Some(target.control.clone()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
     let mut plan = Vec::with_capacity(bundle.records.len());
     for record in &bundle.records {
         let metadata = record.metadata().wrap_err("计算 ingest 记录摘要失败")?;
         let action = match record {
-            IngestRecord::ControlContent { target, .. } => {
-                let (_, document) = load_control(&target.control)
-                    .wrap_err_with(|| format!("加载控制 {} 失败", target.control))?;
-                action_for(document.data.ingest.as_ref(), &metadata, false)
+            IngestRecord::ControlContent {
+                target, content, ..
+            } => {
+                match load_control_if_exists(&target.control)
+                    .wrap_err_with(|| format!("加载控制 {} 失败", target.control))?
+                {
+                    Some((_, document)) => {
+                        action_for(document.data.ingest.as_ref(), &metadata, false)
+                    }
+                    None => {
+                        validate_new_control_metadata(content, &target.control)
+                            .wrap_err_with(|| format!("校验新控制 {} 失败", target.control))?;
+                        PlanAction::Create
+                    }
+                }
             }
             IngestRecord::SystemFact { target, .. } => plan_system_fact(&target.system, &metadata)
                 .wrap_err_with(|| format!("检查系统 '{}' 失败", target.system))?,
             IngestRecord::ProjectFact {
                 target, content, ..
             } => {
-                if let Some(control) = &content.control {
+                if let Some(control) = &content.control
+                    && !planned_controls.contains(control)
+                {
                     ensure_control_exists(control)
                         .wrap_err_with(|| format!("检查项目事实控制 {control} 失败"))?;
                 }
@@ -319,8 +355,10 @@ pub fn plan_bundle(bundle: &IngestBundle) -> eyre::Result<Vec<PlanItem>> {
 
         if let IngestRecord::SystemFact { content, .. } = record {
             for control in &content.related_controls {
-                ensure_control_exists(control)
-                    .wrap_err_with(|| format!("检查系统事实关联控制 {control} 失败"))?;
+                if !planned_controls.contains(control) {
+                    ensure_control_exists(control)
+                        .wrap_err_with(|| format!("检查系统事实关联控制 {control} 失败"))?;
+                }
             }
         }
         plan.push(PlanItem {
@@ -473,6 +511,32 @@ fn validate_common(record: &IngestRecord, prefix: &str) -> eyre::Result<()> {
 }
 
 fn validate_control_content(content: &ControlContent, prefix: &str) -> eyre::Result<()> {
+    for (name, value) in [
+        ("title", content.title.as_deref()),
+        ("category", content.category.as_deref()),
+    ] {
+        if let Some(value) = value {
+            require_nonempty(value, &format!("{prefix}.content.{name}"))
+                .wrap_err_with(|| format!("校验控制元数据字段 {name} 失败"))?;
+        }
+    }
+    if let Some(domain) = &content.domain {
+        require_nonempty(domain.as_str(), &format!("{prefix}.content.domain"))
+            .wrap_err("校验控制域失败")?;
+    }
+    if let Some(levels) = &content.levels {
+        if levels.contains(&0) {
+            eyre::bail!("{prefix}.content.levels 不能包含 0");
+        }
+        let unique = levels.iter().collect::<HashSet<_>>();
+        if unique.len() != levels.len() {
+            eyre::bail!("{prefix}.content.levels 不能包含重复级别");
+        }
+    }
+    if let Some(tags) = &content.tags {
+        validate_string_list(tags, &format!("{prefix}.content.tags"))
+            .wrap_err("校验控制标签失败")?;
+    }
     let sections = [
         (
             "requirement_summary",
@@ -514,6 +578,22 @@ fn validate_control_content(content: &ControlContent, prefix: &str) -> eyre::Res
     Ok(())
 }
 
+fn validate_new_control_metadata(
+    content: &ControlContent,
+    control: &ControlId,
+) -> eyre::Result<()> {
+    if content.title.is_none() {
+        eyre::bail!("新控制 {control} 需要 content.title");
+    }
+    if content.domain.is_none() {
+        eyre::bail!("新控制 {control} 需要 content.domain");
+    }
+    if content.category.is_none() {
+        eyre::bail!("新控制 {control} 需要 content.category");
+    }
+    Ok(())
+}
+
 fn validate_system_fact(content: &SystemFactContent, prefix: &str) -> eyre::Result<()> {
     require_nonempty(&content.domain, &format!("{prefix}.content.domain"))
         .wrap_err("校验系统事实 domain 失败")?;
@@ -545,8 +625,17 @@ fn validate_matrix_assessment(content: &MatrixAssessmentContent, prefix: &str) -
                 .wrap_err_with(|| format!("校验矩阵字段 {name} 失败"))?;
         }
     }
-    if content.status == ControlStatus::Gap && content.gap.is_none() {
-        eyre::bail!("{prefix}.content.status=gap 时必须提供 gap");
+    match content.status {
+        ControlStatus::Partial | ControlStatus::Gap | ControlStatus::Na => {
+            if content.gap.is_none() {
+                eyre::bail!("{prefix}.content.status={} 时必须提供 gap", content.status);
+            }
+        }
+        ControlStatus::Unassessed | ControlStatus::Met => {
+            if content.gap.is_some() {
+                eyre::bail!("{prefix}.content.status={} 时不应提供 gap", content.status);
+            }
+        }
     }
     Ok(())
 }
@@ -590,23 +679,31 @@ fn action_for(
 fn load_control(
     control: &ControlId,
 ) -> eyre::Result<(PathBuf, frontmatter::Document<ControlFrontmatter>)> {
+    load_control_if_exists(control)
+        .wrap_err_with(|| format!("加载控制 {control} 失败"))?
+        .ok_or_else(|| eyre::eyre!("控制 {control} 不在框架索引中"))
+}
+
+fn load_control_if_exists(
+    control: &ControlId,
+) -> eyre::Result<Option<(PathBuf, frontmatter::Document<ControlFrontmatter>)>> {
     let framework = control.framework.as_str();
+    let framework_dir = crate::compliance::framework_dir(framework)
+        .wrap_err_with(|| format!("解析框架 '{framework}' 目录失败"))?;
+    if !framework_dir.join("index.yaml").exists() {
+        return Ok(None);
+    }
     let index = crate::compliance::query::load_index(framework)
         .wrap_err_with(|| format!("加载框架 '{framework}' 索引失败"))?;
-    let entry = index
-        .controls
-        .iter()
-        .find(|entry| entry.id == *control)
-        .ok_or_else(|| eyre::eyre!("控制 {control} 不在框架索引中"))
-        .wrap_err("定位控制文件失败")?;
-    let path = crate::compliance::framework_dir(framework)
-        .wrap_err_with(|| format!("解析框架 '{framework}' 目录失败"))?
-        .join(&entry.file);
+    let Some(entry) = index.controls.iter().find(|entry| entry.id == *control) else {
+        return Ok(None);
+    };
+    let path = framework_dir.join(&entry.file);
     let content = fs::read_to_string(&path)
         .wrap_err_with(|| format!("读取控制文件 {} 失败", path.display()))?;
     let document = frontmatter::parse::<ControlFrontmatter>(&content)
         .wrap_err_with(|| format!("解析控制文件 {} 失败", path.display()))?;
-    Ok((path, document))
+    Ok(Some((path, document)))
 }
 
 fn ensure_control_exists(control: &ControlId) -> eyre::Result<()> {
@@ -691,7 +788,69 @@ fn apply_control_content(
     content: &ControlContent,
     metadata: IngestMetadata,
 ) -> eyre::Result<()> {
-    let (path, mut document) = load_control(control).wrap_err("加载待更新控制失败")?;
+    let (path, mut document) =
+        match load_control_if_exists(control).wrap_err("加载待写入控制失败")? {
+            Some(existing) => existing,
+            None => {
+                validate_new_control_metadata(content, control).wrap_err("校验新控制元数据失败")?;
+                let directory = crate::compliance::framework_dir(control.framework.as_str())
+                    .wrap_err("解析框架目录失败")?
+                    .join("controls");
+                fs::create_dir_all(&directory)
+                    .wrap_err_with(|| format!("创建控制目录 {} 失败", directory.display()))?;
+                let path = directory.join(format!(
+                    "{}.md",
+                    crate::paths::safe_path_component(&control.control_id)
+                ));
+                if path.exists() {
+                    eyre::bail!("新控制 {control} 的目标文件已存在：{}", path.display());
+                }
+                let frontmatter = ControlFrontmatter {
+                    id: control.clone(),
+                    framework: control.framework.clone(),
+                    domain: content.domain.clone().expect("新控制的 domain 已通过校验"),
+                    category: content
+                        .category
+                        .clone()
+                        .expect("新控制的 category 已通过校验"),
+                    control_id: control.control_id.clone(),
+                    title: content.title.clone().expect("新控制的 title 已通过校验"),
+                    levels: content.levels.clone().unwrap_or_default(),
+                    tags: content.tags.clone().unwrap_or_default(),
+                    mappings: Default::default(),
+                    expected_evidence: Vec::new(),
+                    excerpt_status: ExcerptStatus::Empty,
+                    last_reviewed: None,
+                    ingest: None,
+                };
+                (
+                    path,
+                    frontmatter::Document {
+                        data: frontmatter,
+                        body: String::new(),
+                    },
+                )
+            }
+        };
+
+    // 创建时这些字段定义控制索引；后续导入也可以有来源地修正
+    // 标题和分类，而不需要直接编辑 frontmatter。文件不随分类移动，因为索引
+    // 已是定位控制文件的权威来源。
+    if let Some(title) = &content.title {
+        document.data.title = title.clone();
+    }
+    if let Some(domain) = &content.domain {
+        document.data.domain = domain.clone();
+    }
+    if let Some(category) = &content.category {
+        document.data.category = category.clone();
+    }
+    if let Some(levels) = &content.levels {
+        document.data.levels = levels.clone();
+    }
+    if let Some(tags) = &content.tags {
+        document.data.tags = tags.clone();
+    }
     document.data.excerpt_status = content.completeness;
     document.data.last_reviewed = Some(Local::now().date_naive());
     document.data.ingest = Some(metadata);
@@ -890,8 +1049,11 @@ fn apply_matrix_assessment(
         .ok_or_else(|| eyre::eyre!("控制 {} 不在项目矩阵中", target.control))
         .wrap_err("定位矩阵控制失败")?;
     entry.status = content.status;
-    if let Some(gap) = &content.gap {
-        entry.gap = gap.clone();
+    match content.status {
+        ControlStatus::Unassessed | ControlStatus::Met => entry.gap.clear(),
+        ControlStatus::Partial | ControlStatus::Gap | ControlStatus::Na => {
+            entry.gap = content.gap.clone().expect("需要理由的状态已通过校验");
+        }
     }
     if let Some(remediation) = &content.remediation {
         entry.remediation = remediation.clone();

@@ -76,7 +76,7 @@ last_reviewed: 2026-07-29
 (常见不合规点)
 ```
 
-字段:`id`/`framework`/`domain`(技术|管理)/`category`/`control_id`/`title`/`levels`/`tags`/`mappings`(跨框架,只存 ID)/`expected_evidence`/`excerpt_status`(empty|partial|complete)/`last_reviewed`。统一导入的记录还会带可选 `ingest` 元数据。
+字段:`id`/`framework`/`domain`(由框架定义)/`category`/`control_id`/`title`/`levels`/`tags`/`mappings`(跨框架,只存 ID)/`expected_evidence`/`excerpt_status`(empty|partial|complete)/`last_reviewed`。统一导入的记录还会带可选 `ingest` 元数据。
 
 ### 2.2 统一 ingest bundle
 
@@ -89,8 +89,12 @@ last_reviewed: 2026-07-29
 complai ingest schema
 complai ingest validate --from tmp/complai-ingest.json
 complai ingest plan --from tmp/complai-ingest.json
+# 检查 create/update/unchanged 和所有目标后才执行：
 complai ingest apply --from tmp/complai-ingest.json
 ```
+
+对尚未入库的框架，`control_content` 记录同时提供 `title`、`domain` 和
+`category` 即可创建控制项；框架有级别概念时再提供 `levels`。
 
 写入后的 `ingest` 元数据包含稳定 `external_key`、记录摘要、来源类型、标题、
 引用、原文定位、可选文件哈希和文档日期，以及置信度。重复导入相同记录会标记为
@@ -165,7 +169,8 @@ entries:
     last_updated: 2026-07-29
 ```
 
-`status`:met/partial/gap/na。
+`status`:unassessed/met/partial/gap/na。新建矩阵使用 `unassessed`；`na`
+仅表示经评估确认不适用。
 
 ### 2.7 项目事实 `facts/<kind>/PROJ-F-NNNN.md`(项目专属)
 
@@ -188,7 +193,8 @@ created_at: 2026-07-29
 
 ### 2.8 `evidence.yaml`(证据索引,项目)
 
-`evidence add` 登记(算 sha256、按控制点就近存)。`type`:screenshot/config/policy-doc/log/record。
+`evidence add` 登记(算 sha256、按控制点就近存)；`evidence list/find/show`
+用于查询。`type`:screenshot/config/policy-doc/log/record。
 
 ```yaml
 evidence:
@@ -210,12 +216,12 @@ evidence:
 ### 3.1 共享知识库(一次性)
 
 **compliance KB**:
-1. 框架 + 等级(如 dengbao-2.0、3)。
+1. 框架 + 可选级别(如 dengbao-2.0、3；ISO 等无级别框架不填)。
 2. 用户有权使用的规范或既有材料。
 3. 每条抽取记录的来源定位和置信度。
 
-先运行 `complai compliance scaffold dengbao-2.0` 生成控制桩，再由 `doc-ingest`
-workflow 读取材料并通过统一 bundle 写入规范内容。
+等保 2.0 先运行 `complai compliance scaffold dengbao-2.0` 生成控制桩；
+其他框架由 `doc-ingest` workflow 在统一 bundle 中创建控制元数据并写入正文。
 
 **system KB**(每个系统一次,可被多项目复用):
 1. system slug(ASCII,如 order-platform)+ 中文显示名(如 订单平台)。
@@ -230,12 +236,14 @@ complai system add --system order-platform --domain 架构 --title "微服务拓
 
 ### 3.2 项目(每个备案)
 
-需准备:项目名 + system slug + 框架 + 等级(定级)。(可由 `project-init` skill 引导完成。)
+需准备:项目名 + system slug + 框架 + 框架可选级别。(可由 `project-init` skill 引导完成。)
 
 ```sh
 complai project init order-platform-dengbao3 --system order-platform --framework dengbao-2.0 --level 3
 cd order-platform-dengbao3
 ```
+
+无级别框架省略 `--level`。初始矩阵中每项状态为 `unassessed`。
 
 之后:跑 `gap-analysis` skill(或手工 `matrix set/link`)判差距;`fact add` 记整改项;`evidence add` 登记证据;`gen report` 出报告。
 

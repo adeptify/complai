@@ -53,7 +53,8 @@ level: 3
 - 新 `system_root() = kb_root/system/`、`system_dir(slug)`;`system_current_slug()` 从项目读 system 引用。
 
 ### `project`
-- `project init <name> --system <slug> --framework <f> --level <l>` -> 写 project.yaml(含 system 引用);若 `system/<slug>` 不存在则建(display_name=slug,提示可用 `system init` 改名);从 compliance KB 索引预填矩阵。
+- `project init <name> --system <slug> --framework <f> [--level <l>]` -> 写 project.yaml(含 system 引用);若 `system/<slug>` 不存在则建(display_name=slug,提示可用 `system init` 改名);从 compliance KB 索引以 `unassessed` 预填矩阵。
+- `project show` -> 输出当前项目的系统、框架和可选级别，供 Agent 通用路由。
 
 ### `fact`(项目专属事实,新命令组)
 - `fact add --kind <整改|例外|决策|发现|备注> --title <t> [--control <id>] [--body <text>]` -> `facts/<kind>/PROJ-F-NNNN.md`。
@@ -64,10 +65,14 @@ level: 3
 - `matrix trace <control>` -> 控制正文(compliance KB)+ 系统事实(共享 system KB,按项目 system 引用)+ 项目事实(项目 `facts/`)+ 证据(项目)+ 矩阵状态。
 - `matrix show/set` -> 基本不变(show 多显示 project_facts 计数)。
 
+### `evidence`
+- `evidence list/show/find --control` -> 发现和核对已登记证据，再由 `matrix link` 关联。
+
 ### `ingest`(统一 Agent 写入协议)
 - `ingest schema` 输出版本化 JSON Schema。
 - `ingest validate/plan/apply --from <bundle.json>` 统一写入控制内容、系统事实、
   项目事实和矩阵评估；保存来源定位与置信度，并按 `external_key` 幂等 upsert。
+- 新框架的 `control_content` 携带 title/domain/category 时创建控制项和索引。
 - 原始 Excel、PDF、Word、图片和云文档由 Agent 使用当前环境的读取能力处理，
   CLI 不再提供格式专用 `parse` 或目标专用批量 ingest 命令。
 

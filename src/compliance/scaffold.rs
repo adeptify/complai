@@ -49,7 +49,7 @@ pub fn scaffold(framework: &str) -> eyre::Result<()> {
 fn scaffold_dengbao() -> eyre::Result<()> {
     let structure: FrameworkStructure =
         serde_yml::from_str(DENGBAO_2_0_STRUCTURE).wrap_err("解析内置 dengbao-2.0 结构表失败")?;
-    let dir = framework_dir(&structure.framework)?;
+    let dir = framework_dir(&structure.framework).wrap_err("解析合规框架目录失败")?;
     let mut created = 0usize;
     let mut skipped = 0usize;
 
@@ -73,7 +73,7 @@ fn scaffold_dengbao() -> eyre::Result<()> {
                 let fm = ControlFrontmatter {
                     id: ControlId::new(&structure.framework, &control_id),
                     framework: Framework(structure.framework.clone()),
-                    domain: domain_enum,
+                    domain: domain_enum.clone(),
                     category: category.name.clone(),
                     control_id,
                     title: point.clone(),
@@ -86,7 +86,8 @@ fn scaffold_dengbao() -> eyre::Result<()> {
                     ingest: None,
                 };
                 let body = default_body(point);
-                let content = frontmatter::serialize(&fm, &body)?;
+                let content =
+                    frontmatter::serialize(&fm, &body).wrap_err("序列化控制桩文件失败")?;
 
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent)
@@ -100,7 +101,7 @@ fn scaffold_dengbao() -> eyre::Result<()> {
     }
 
     // 生成桩文件后立即构建索引,使 `compliance list`/`compliance show` 可用。
-    crate::compliance::build::build(&structure.framework)?;
+    crate::compliance::build::build(&structure.framework).wrap_err("构建等保框架索引失败")?;
 
     println!(
         "scaffolded {created} controls ({skipped} already existed) for {} into {}",

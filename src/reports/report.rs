@@ -15,13 +15,15 @@ use crate::project::matrix::MatrixEntry;
 use crate::project::project_root;
 
 /// 报告分组:域 -> 类别 -> (control_id, 标题, 矩阵条目)。
-type GroupedEntries<'a> = BTreeMap<String, BTreeMap<String, Vec<(String, String, &'a MatrixEntry)>>>;
+type GroupedEntries<'a> =
+    BTreeMap<String, BTreeMap<String, Vec<(String, String, &'a MatrixEntry)>>>;
 
 pub fn generate() -> eyre::Result<()> {
-    let root = project_root()?;
-    let matrix = crate::project::matrix::load(&root)?;
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let matrix = crate::project::matrix::load(&root).wrap_err("加载控制矩阵失败")?;
     let framework = matrix.framework.as_str().to_string();
-    let kb_index = load_index(&framework).wrap_err("加载知识库索引失败(先 complai compliance build)")?;
+    let kb_index =
+        load_index(&framework).wrap_err("加载知识库索引失败(先 complai compliance build)")?;
 
     // 控制标题/域/类别从 KB 索引取;矩阵只有 ID。
     let kb_by_id: HashMap<ControlId, &ControlIndexEntry> = kb_index
@@ -68,13 +70,21 @@ pub fn generate() -> eyre::Result<()> {
         .values()
         .filter(|e| e.status == ControlStatus::Na)
         .count();
+    let unassessed = matrix
+        .entries
+        .values()
+        .filter(|e| e.status == ControlStatus::Unassessed)
+        .count();
 
     let mut out = String::new();
     out.push_str("# 合规差距报告\n\n");
-    out.push_str(&format!("- 框架: {} (等级 {})\n", matrix.framework, matrix.level));
+    out.push_str(&format!("- 框架: {}\n", matrix.framework));
+    if let Some(level) = matrix.level {
+        out.push_str(&format!("- 等级: {level}\n"));
+    }
     out.push_str(&format!("- 范围: {}\n", matrix.scope.systems.join(", ")));
     out.push_str(&format!(
-        "- 统计: 共 {total} 项 | 满足 {met} | 部分满足 {partial} | 缺口 {gaps} | 不适用 {na}\n"
+        "- 统计: 共 {total} 项 | 未评估 {unassessed} | 满足 {met} | 部分满足 {partial} | 缺口 {gaps} | 不适用 {na}\n"
     ));
     if missing > 0 {
         out.push_str(&format!("- ⚠ {missing} 个矩阵控制项在知识库索引中缺失\n"));
@@ -101,7 +111,13 @@ pub fn generate() -> eyre::Result<()> {
                     out.push_str(&format!("  - 证据: {}\n", entry.evidence.join(", ")));
                 }
                 if !entry.facts.is_empty() {
-                    out.push_str(&format!("  - 事实: {}\n", entry.facts.join(", ")));
+                    out.push_str(&format!("  - 系统事实: {}\n", entry.facts.join(", ")));
+                }
+                if !entry.project_facts.is_empty() {
+                    out.push_str(&format!(
+                        "  - 项目事实: {}\n",
+                        entry.project_facts.join(", ")
+                    ));
                 }
             }
             out.push('\n');

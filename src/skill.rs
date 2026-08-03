@@ -18,7 +18,7 @@ pub struct Skill {
 const SKILLS: &[Skill] = &[
     Skill {
         name: "project-init",
-        description: "创建合规项目并绑定系统、框架与等级",
+        description: "创建合规项目并绑定系统、框架与可选级别",
         prompt: include_str!("skills_content/project-init/SKILL.md"),
     },
     Skill {

@@ -5,7 +5,7 @@
 use serial_test::serial;
 use tempfile::TempDir;
 
-use complai::{compliance, ingest, project, reports, system};
+use complai::{compliance, ingest, model, project, reports, system};
 
 #[test]
 #[serial]
@@ -51,7 +51,7 @@ fn unified_ingest_applies_all_record_types_idempotently() {
         project_path.to_str().unwrap(),
         "order-platform",
         "dengbao-2.0",
-        3,
+        Some(3),
     )
     .unwrap();
     unsafe {
@@ -264,7 +264,7 @@ fn project_end_to_end_produces_gap_report() {
         proj_path.to_str().unwrap(),
         "order-platform",
         "dengbao-2.0",
-        3,
+        Some(3),
     )
     .unwrap();
     unsafe {
@@ -338,12 +338,145 @@ fn system_shared_across_projects() {
 
     let pr1 = TempDir::new().unwrap();
     let p1 = pr1.path().join("a");
-    project::init::init(p1.to_str().unwrap(), "shared-sys", "dengbao-2.0", 3).unwrap();
+    project::init::init(p1.to_str().unwrap(), "shared-sys", "dengbao-2.0", Some(3)).unwrap();
     let pr2 = TempDir::new().unwrap();
     let p2 = pr2.path().join("b");
-    project::init::init(p2.to_str().unwrap(), "shared-sys", "dengbao-2.0", 3).unwrap();
+    project::init::init(p2.to_str().unwrap(), "shared-sys", "dengbao-2.0", None).unwrap();
 
     let idx = system::fact::load_index("shared-sys").unwrap();
     assert_eq!(idx.facts.len(), 1);
     assert_eq!(idx.display_name.as_deref(), Some("共享系统"));
+    assert_eq!(
+        project::load_meta(&p2).expect("等保项目元数据可加载").level,
+        Some(3)
+    );
+}
+
+#[test]
+#[serial]
+fn generic_framework_controls_can_be_ingested_and_assessed() {
+    let kb_dir = TempDir::new().expect("临时 KB 目录可创建");
+    unsafe {
+        std::env::set_var("COMPLAI_KB_DIR", kb_dir.path());
+        std::env::remove_var("COMPLAI_PROJECT_DIR");
+    }
+
+    let json = r#"{
+      "schema_version": "complai.ingest/v1",
+      "records": [{
+        "kind": "control_content",
+        "external_key": "iso27001:2022:A.5.1",
+        "source": {
+          "type": "licensed-standard",
+          "title": "ISO/IEC 27001:2022 control notes",
+          "reference": "iso27001-notes.pdf",
+          "locator": "A.5.1"
+        },
+        "confidence": "high",
+        "target": {"control": "iso27001-2022:A.5.1"},
+        "content": {
+          "title": "Policies for information security",
+          "domain": "Organizational controls",
+          "category": "Information security policies",
+          "requirement_summary": "Define, approve, communicate, and review information security policies.",
+          "expected_evidence": ["Approved information security policy"],
+          "completeness": "partial"
+        }
+      }]
+    }"#;
+    let bundle: ingest::IngestBundle = serde_json::from_str(json).expect("通用框架 bundle 应合法");
+    let plan = ingest::plan_bundle(&bundle).expect("新框架应可预览");
+    assert_eq!(plan[0].action, ingest::PlanAction::Create);
+    ingest::apply_bundle(
+        &bundle,
+        ingest::ApplyOptions {
+            allow_low_confidence: false,
+        },
+    )
+    .expect("新框架应可写入");
+    let repeated_plan = ingest::plan_bundle(&bundle).expect("重复导入应可预览");
+    assert_eq!(repeated_plan[0].action, ingest::PlanAction::Unchanged);
+
+    let index = compliance::query::load_index("iso27001-2022").expect("新框架应自动建立索引");
+    assert_eq!(index.controls.len(), 1);
+    assert_eq!(index.controls[0].id.control_id, "A.5.1");
+    assert_eq!(
+        index.controls[0].domain,
+        model::Domain::new("Organizational controls").expect("控制域合法")
+    );
+
+    system::init::init("global-service", "Global Service".to_string()).expect("系统应可初始化");
+    let project_parent = TempDir::new().expect("临时项目目录可创建");
+    let project_path = project_parent.path().join("iso-assessment");
+    project::init::init(
+        project_path.to_str().expect("项目路径是 UTF-8"),
+        "global-service",
+        "iso27001-2022",
+        None,
+    )
+    .expect("无等级框架应可初始化项目");
+    unsafe {
+        std::env::set_var("COMPLAI_PROJECT_DIR", &project_path);
+    }
+
+    // 旧版把无内容的 `na` 当初始值；加载时应将这种可明确识别的旧数据
+    // 视为未评估，但不改动有理由的真实 `na`。
+    let matrix_path = project_path.join("matrix.yaml");
+    let legacy_matrix = std::fs::read_to_string(&matrix_path)
+        .expect("初始矩阵应可读取")
+        .replacen("status: unassessed", "status: na", 1);
+    std::fs::write(&matrix_path, legacy_matrix).expect("旧版矩阵测试数据应可写入");
+
+    let control: model::ControlId = "iso27001-2022:A.5.1".parse().expect("通用控制 ID 合法");
+    let matrix = project::matrix::load(&project_path).expect("矩阵应可加载");
+    assert_eq!(matrix.level, None);
+    assert_eq!(
+        matrix.entries.get(&control).expect("控制已预填").status,
+        model::ControlStatus::Unassessed
+    );
+    project::show().expect("项目路由信息应可查询");
+    reports::report::generate().expect("初始报告应可生成");
+    let initial_report = std::fs::read_to_string(project_path.join("drafts/compliance-report.md"))
+        .expect("初始报告应可读取");
+    assert!(initial_report.contains("未评估 1"));
+    assert!(project::matrix::set("iso27001-2022:A.5.1", "na", None, None).is_err());
+    assert!(
+        project::matrix::link(
+            "iso27001-2022:A.5.1",
+            Some("EV-9999".to_string()),
+            None,
+            None,
+        )
+        .is_err()
+    );
+
+    let evidence_source = project_path.join("policy.txt");
+    std::fs::write(&evidence_source, "approved policy").expect("测试证据文件应可写入");
+    project::evidence::add(
+        evidence_source.to_str().expect("证据路径是 UTF-8"),
+        "iso27001-2022:A.5.1",
+        "policy-doc".to_string(),
+        Some("Approved information security policy".to_string()),
+    )
+    .expect("证据应可登记");
+    project::evidence::list().expect("证据应可列出");
+    project::evidence::show("EV-0001").expect("证据应可查看");
+    project::evidence::find("iso27001-2022:A.5.1").expect("证据应可按控制查找");
+    project::matrix::link(
+        "iso27001-2022:A.5.1",
+        Some("EV-0001".to_string()),
+        None,
+        None,
+    )
+    .expect("存在的证据应可关联");
+    project::matrix::set("iso27001-2022:A.5.1", "met", None, None)
+        .expect("有支撑的控制应可标记满足");
+
+    reports::report::generate().expect("通用框架报告应可生成");
+    let report = std::fs::read_to_string(project_path.join("drafts/compliance-report.md"))
+        .expect("报告应可读取");
+    assert!(report.contains("框架: iso27001-2022"));
+    assert!(!report.contains("等级:"));
+    assert!(report.contains("未评估 0"));
+    assert!(report.contains("满足 1"));
 }

@@ -41,7 +41,7 @@ pub struct MatrixEntry {
 impl MatrixEntry {
     pub fn empty() -> Self {
         Self {
-            status: ControlStatus::Na,
+            status: ControlStatus::Unassessed,
             owner: String::new(),
             evidence: Vec::new(),
             facts: Vec::new(),
@@ -65,7 +65,8 @@ pub struct Scope {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Matrix {
     pub framework: Framework,
-    pub level: u8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level: Option<u8>,
     pub scope: Scope,
     #[serde(default)]
     pub entries: BTreeMap<ControlId, MatrixEntry>,
@@ -77,7 +78,24 @@ fn matrix_path(root: &Path) -> PathBuf {
 
 pub fn load(root: &Path) -> eyre::Result<Matrix> {
     let content = fs::read_to_string(matrix_path(root)).wrap_err("读 matrix.yaml 失败")?;
-    serde_yml::from_str(&content).wrap_err("解析 matrix.yaml 失败")
+    let mut matrix: Matrix = serde_yml::from_str(&content).wrap_err("解析 matrix.yaml 失败")?;
+
+    // v0.3 之前用无内容的 `na` 表示初始项。只迁移没有理由、时间或
+    // 导入痕迹的项；经评估并写明不适用理由的旧 `na` 继续保留。
+    for entry in matrix.entries.values_mut() {
+        let is_legacy_default = entry.status == ControlStatus::Na
+            && entry.gap.is_empty()
+            && entry.last_updated.is_none()
+            && entry.ingest.is_none()
+            && entry.owner.is_empty()
+            && entry.evidence.is_empty()
+            && entry.facts.is_empty()
+            && entry.project_facts.is_empty();
+        if is_legacy_default {
+            entry.status = ControlStatus::Unassessed;
+        }
+    }
+    Ok(matrix)
 }
 
 pub(crate) fn save(root: &Path, matrix: &Matrix) -> eyre::Result<()> {
@@ -86,12 +104,12 @@ pub(crate) fn save(root: &Path, matrix: &Matrix) -> eyre::Result<()> {
 }
 
 pub fn show(status_filter: Option<&str>) -> eyre::Result<()> {
-    let root = project_root()?;
-    let matrix = load(&root)?;
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let matrix = load(&root).wrap_err("加载控制矩阵失败")?;
     let filter = match status_filter {
         Some(s) => Some(
             ControlStatus::from_str(s)
-                .wrap_err_with(|| format!("未知状态 `{s}`(应为 met/partial/gap/na)"))?,
+                .wrap_err_with(|| format!("未知状态 `{s}`(应为 unassessed/met/partial/gap/na)"))?,
         ),
         None => None,
     };
@@ -137,24 +155,46 @@ pub fn set(
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
     let status = ControlStatus::from_str(status_str)
-        .wrap_err_with(|| format!("未知状态 `{status_str}`(应为 met/partial/gap/na)"))?;
-    let root = project_root()?;
-    let mut matrix = load(&root)?;
+        .wrap_err_with(|| format!("未知状态 `{status_str}`(应为 unassessed/met/partial/gap/na)"))?;
+
+    // “缺口”字段只用于需要解释未满足或不适用的结论。强制这个
+    // 不变式可避免报告中出现无理由的 `na`，或 `met` 仍携带过期缺口。
+    match status {
+        ControlStatus::Partial | ControlStatus::Gap | ControlStatus::Na => {
+            let Some(reason) = gap.as_deref() else {
+                eyre::bail!("status={status} 时必须用 --gap 说明缺口或不适用理由");
+            };
+            if reason.trim().is_empty() {
+                eyre::bail!("status={status} 时 --gap 不能为空");
+            }
+        }
+        ControlStatus::Unassessed | ControlStatus::Met => {
+            if gap.as_ref().is_some_and(|reason| !reason.trim().is_empty()) {
+                eyre::bail!("status={status} 不应设置 --gap");
+            }
+        }
+    }
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let mut matrix = load(&root).wrap_err("加载控制矩阵失败")?;
     {
         let entry = matrix
             .entries
-            .entry(cid.clone())
-            .or_insert_with(MatrixEntry::empty);
+            .get_mut(&cid)
+            .ok_or_else(|| eyre::eyre!("控制 {cid} 不在矩阵中"))
+            .wrap_err("定位矩阵控制失败")?;
         entry.status = status;
-        if let Some(g) = gap {
-            entry.gap = g;
+        match status {
+            ControlStatus::Unassessed | ControlStatus::Met => entry.gap.clear(),
+            ControlStatus::Partial | ControlStatus::Gap | ControlStatus::Na => {
+                entry.gap = gap.expect("需要理由的状态已通过校验");
+            }
         }
         if let Some(o) = owner {
             entry.owner = o;
         }
         entry.last_updated = Some(Local::now().date_naive());
     }
-    save(&root, &matrix)?;
+    save(&root, &matrix).wrap_err("保存控制矩阵失败")?;
     println!("set {cid} -> {status}");
     Ok(())
 }
@@ -171,13 +211,43 @@ pub fn link(
     let cid: ControlId = control_str
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
-    let root = project_root()?;
-    let mut matrix = load(&root)?;
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let mut matrix = load(&root).wrap_err("加载控制矩阵失败")?;
+
+    // 在写入矩阵前校验所有引用，避免差距分析产生表面上已关联、
+    // 实际无法追溯的证据或事实 ID。
+    if let Some(evidence_id) = &evidence {
+        let evidence_index =
+            crate::project::evidence::load_index(&root).wrap_err("加载证据索引失败")?;
+        if !evidence_index.evidence.contains_key(evidence_id) {
+            eyre::bail!("证据 {evidence_id} 不存在");
+        }
+    }
+    if let Some(fact_id) = &fact {
+        let system = current_system_slug().wrap_err("读取当前项目系统失败")?;
+        let fact_index = crate::system::fact::load_index(&system)
+            .wrap_err_with(|| format!("加载系统 `{system}` 事实索引失败"))?;
+        if !fact_index.facts.iter().any(|entry| entry.id == *fact_id) {
+            eyre::bail!("系统事实 {fact_id} 不存在");
+        }
+    }
+    if let Some(project_fact_id) = &project_fact {
+        let fact_index =
+            crate::project::fact::load_index(&root).wrap_err("加载项目事实索引失败")?;
+        if !fact_index
+            .facts
+            .iter()
+            .any(|entry| entry.id == *project_fact_id)
+        {
+            eyre::bail!("项目事实 {project_fact_id} 不存在");
+        }
+    }
     {
         let entry = matrix
             .entries
-            .entry(cid.clone())
-            .or_insert_with(MatrixEntry::empty);
+            .get_mut(&cid)
+            .ok_or_else(|| eyre::eyre!("控制 {cid} 不在矩阵中"))
+            .wrap_err("定位矩阵控制失败")?;
         if let Some(ev) = &evidence
             && !entry.evidence.contains(ev)
         {
@@ -195,7 +265,7 @@ pub fn link(
         }
         entry.last_updated = Some(Local::now().date_naive());
     }
-    save(&root, &matrix)?;
+    save(&root, &matrix).wrap_err("保存控制矩阵失败")?;
     println!("linked to {cid}: evidence={evidence:?} fact={fact:?} project_fact={project_fact:?}");
     Ok(())
 }
@@ -205,29 +275,33 @@ pub fn trace(control_str: &str) -> eyre::Result<()> {
     let cid: ControlId = control_str
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
-    let root = project_root()?;
-    let matrix = load(&root)?;
+    let root = project_root().wrap_err("定位当前项目失败")?;
+    let matrix = load(&root).wrap_err("加载控制矩阵失败")?;
     let entry = matrix
         .entries
         .get(&cid)
-        .ok_or_else(|| eyre::eyre!("控制 {cid} 不在矩阵中"))?;
+        .ok_or_else(|| eyre::eyre!("控制 {cid} 不在矩阵中"))
+        .wrap_err("定位矩阵控制失败")?;
 
     // 1) 控制正文(compliance KB)。
     let framework = matrix.framework.as_str().to_string();
-    let kb_dir = crate::compliance::framework_dir(&framework)?;
-    let kb_index = crate::compliance::query::load_index(&framework)?;
+    let kb_dir = crate::compliance::framework_dir(&framework).wrap_err("解析合规框架目录失败")?;
+    let kb_index =
+        crate::compliance::query::load_index(&framework).wrap_err("加载合规框架索引失败")?;
     let ctl = kb_index
         .controls
         .iter()
         .find(|e| e.id == cid)
-        .ok_or_else(|| eyre::eyre!("控制 {cid} 不在知识库索引中"))?;
+        .ok_or_else(|| eyre::eyre!("控制 {cid} 不在知识库索引中"))
+        .wrap_err("定位知识库控制失败")?;
     let control_body = fs::read_to_string(kb_dir.join(&ctl.file))
         .wrap_err_with(|| format!("读取控制正文 {} 失败", ctl.file))?;
     println!("=== 控制正文 ===\n{control_body}");
 
     // 2) 系统事实(共享 system KB,按项目引用的 system slug)。
-    let slug = current_system_slug()?;
-    let sys_index = crate::system::fact::load_index(&slug)?;
+    let slug = current_system_slug().wrap_err("读取当前项目系统失败")?;
+    let sys_index = crate::system::fact::load_index(&slug)
+        .wrap_err_with(|| format!("加载系统 `{slug}` 事实索引失败"))?;
     println!("=== 系统事实 ({}) ===", entry.facts.len());
     for fid in &entry.facts {
         match sys_index.facts.iter().find(|e| &e.id == fid) {
@@ -237,7 +311,7 @@ pub fn trace(control_str: &str) -> eyre::Result<()> {
     }
 
     // 3) 项目事实(项目 facts/)。
-    let pf_index = crate::project::fact::load_index(&root)?;
+    let pf_index = crate::project::fact::load_index(&root).wrap_err("加载项目事实索引失败")?;
     println!("=== 项目事实 ({}) ===", entry.project_facts.len());
     for pid in &entry.project_facts {
         match pf_index.facts.iter().find(|e| &e.id == pid) {
@@ -247,7 +321,7 @@ pub fn trace(control_str: &str) -> eyre::Result<()> {
     }
 
     // 4) 证据(项目)。
-    let ev_index = crate::project::evidence::load_index(&root)?;
+    let ev_index = crate::project::evidence::load_index(&root).wrap_err("加载证据索引失败")?;
     println!("=== 证据 ({}) ===", entry.evidence.len());
     for eid in &entry.evidence {
         match ev_index.evidence.get(eid) {

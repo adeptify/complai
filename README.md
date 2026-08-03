@@ -43,8 +43,8 @@ Complai 负责稳定的数据模型、严格的写入边界、来源追踪和确
 - **建模：** 初始化合规框架、业务系统和完整控制矩阵。
 - **灌库：** Agent 读取任意可访问的 Excel、PDF、Word、图片、飞书或腾讯文档，
   生成版本化 JSON bundle。
-- **评估：** 对照控制要求、系统事实和证据，记录 `met`、`partial`、`gap` 或
-  `na`，并补充缺口、负责人和整改信息。
+- **评估：** 对照控制要求、系统事实和证据，将控制项从 `unassessed` 更新为
+  `met`、`partial`、`gap` 或 `na`，并补充缺口、负责人和整改信息。
 - **交付：** 追溯每个判断的来源，登记证据，生成可复核的合规差距报告。
 
 ## 为什么使用 Complai
@@ -55,7 +55,7 @@ Complai 负责稳定的数据模型、严格的写入边界、来源追踪和确
 - **来源可追溯：** 保存来源类型、文档引用、页码/工作表/区块定位、可选 SHA-256、
   文档日期、置信度和稳定 external key。
 - **系统知识可复用：** 同一系统跨框架、跨年度评估时，无需重复维护架构和资产信息。
-- **本地开放：** 知识库与项目状态以可检查、可迁移的本地文件保存，不隐藏在提示词
+- **本地开放：** 知识库与项目状态以可检查、可审计的本地文件保存，不隐藏在提示词
   或封闭平台中。
 
 ## 工作原理
@@ -90,17 +90,17 @@ Complai 由 Agent 驱动：安装 CLI、安装轻量 discovery skill，然后直
 
 ### 1. 安装 CLI
 
-需要 stable Rust 和 Cargo。当前功能基线是 Complai `0.4.0`：
+需要 stable Rust 和 Cargo。安装 crates.io 上的当前版本：
 
 ```sh
-cargo install complai --version 0.4.0 --locked
+cargo install complai --locked
 complai --version
 ```
 
-如需使用尚未发布的仓库版本：
+已经安装过 Complai 时，直接更新到当前版本：
 
 ```sh
-cargo install --git https://github.com/adeptify/complai --locked --force
+cargo install complai --locked --force
 complai --version
 ```
 
@@ -119,7 +119,26 @@ complai skill list
 complai skill get project-init
 ```
 
-### 3. 让 Agent 初始化评估项目
+### 3. 准备目标框架的控制库
+
+先让 Agent 检查目标框架是否已经入库：
+
+```sh
+complai compliance list --framework <框架>
+```
+
+等保 2.0 可以直接创建内置三级控制结构：
+
+```sh
+complai compliance scaffold dengbao-2.0
+```
+
+ISO、NIST、SOC 2、PCI DSS 或其他尚未入库的框架，由 Agent 先从用户有权使用的
+规范材料生成 `control_content` ingest bundle。每个新控制项提供 `title`、`domain`
+和 `category`，框架定义级别时再提供 `levels`；经 `validate → plan → apply` 后，
+Complai 会创建控制项并建立框架索引。
+
+### 4. 让 Agent 初始化评估项目
 
 在准备创建项目的目录中打开 Agent，然后说：
 
@@ -129,15 +148,19 @@ complai skill get project-init
 Agent 会加载 `project-init`，确认系统、框架、项目名和框架可选级别，然后执行：
 
 ```sh
-complai compliance scaffold dengbao-2.0
 complai system init order-platform --name "订单平台"
 complai project init order-platform-dengbao3 \
   --system order-platform \
   --framework dengbao-2.0 \
   --level 3
+cd order-platform-dengbao3
+complai project show
+complai matrix show --status unassessed
 ```
 
-### 4. 提供已有材料
+没有级别概念的框架省略 `--level`。矩阵中的控制项初始状态统一为 `unassessed`。
+
+### 5. 提供已有材料
 
 把本地材料放到一个目录、直接附加给 Agent，或者提供 Agent 有权访问的云文档链接，
 然后说：
@@ -165,13 +188,10 @@ complai ingest apply --from tmp/complai-ingest.json
 | `project_fact` | 当前评估项目 | 发现、整改、例外、决策 |
 | `matrix_assessment` | 当前控制矩阵 | 测评结论和缺口 |
 
-导入 ISO、NIST、SOC 2、PCI DSS 等尚未入库的框架时，在 `control_content`
-中同时提供 `title`、`domain` 和 `category`，Complai 会创建控制项并自动建立索引。
-
 低置信度记录默认拒绝写入；只有用户复核确认后，才能使用
 `--allow-low-confidence`。
 
-### 5. 开展差距分析并生成报告
+### 6. 开展差距分析并生成报告
 
 继续告诉 Agent：
 

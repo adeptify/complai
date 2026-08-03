@@ -52,8 +52,8 @@ project.
 - **Ingest:** Let an agent read any accessible Excel, PDF, Word, image, Feishu,
   or Tencent document and produce a versioned JSON bundle.
 - **Assess:** Compare control requirements with system facts and evidence,
-  record `met`, `partial`, `gap`, or `na`, and capture gaps, owners, and
-  remediation details.
+  move controls from `unassessed` to `met`, `partial`, `gap`, or `na`, and
+  capture gaps, owners, and remediation details.
 - **Deliver:** Trace every decision back to its source, register evidence, and
   generate a reviewable compliance gap report.
 
@@ -107,18 +107,17 @@ skill, then describe the compliance task you want to complete.
 
 ### 1. Install the CLI
 
-Stable Rust and Cargo are required. The current feature baseline is Complai
-`0.4.0`:
+Stable Rust and Cargo are required. Install the current crates.io release:
 
 ```sh
-cargo install complai --version 0.4.0 --locked
+cargo install complai --locked
 complai --version
 ```
 
-To use an unreleased repository version:
+If Complai is already installed, update it directly to the current release:
 
 ```sh
-cargo install --git https://github.com/adeptify/complai --locked --force
+cargo install complai --locked --force
 complai --version
 ```
 
@@ -139,7 +138,27 @@ complai skill list
 complai skill get project-init
 ```
 
-### 3. Ask your agent to initialize an assessment project
+### 3. Prepare the target framework control library
+
+Ask the agent to check whether the target framework is already available:
+
+```sh
+complai compliance list --framework <framework>
+```
+
+The built-in Level 3 MLPS 2.0 structure can be created directly:
+
+```sh
+complai compliance scaffold dengbao-2.0
+```
+
+For ISO, NIST, SOC 2, PCI DSS, or any other framework not yet in the KB, have
+the agent first build a `control_content` ingest bundle from standards material
+the user is authorized to use. Each new control supplies `title`, `domain`, and
+`category`, plus `levels` only when the framework defines levels. After
+`validate → plan → apply`, Complai creates the controls and framework index.
+
+### 4. Ask your agent to initialize an assessment project
 
 Open your agent in the directory where you want to create the project, then
 say:
@@ -152,15 +171,20 @@ The agent loads `project-init`, confirms the system, framework, project name,
 and an optional framework level, then runs:
 
 ```sh
-complai compliance scaffold dengbao-2.0
 complai system init order-platform --name "Order Platform"
 complai project init order-platform-dengbao3 \
   --system order-platform \
   --framework dengbao-2.0 \
   --level 3
+cd order-platform-dengbao3
+complai project show
+complai matrix show --status unassessed
 ```
 
-### 4. Provide existing material
+Omit `--level` for frameworks that do not define levels. Every matrix control
+starts in the `unassessed` state.
+
+### 5. Provide existing material
 
 Place local material in a directory, attach it to the agent, or provide a cloud
 document link the agent is authorized to access. Then say:
@@ -189,14 +213,10 @@ One bundle can contain four record types:
 | `project_fact` | Current assessment project | Findings, remediation, exceptions, decisions |
 | `matrix_assessment` | Current control matrix | Assessment decisions and gaps |
 
-When importing a framework that is not in the KB yet, such as ISO, NIST,
-SOC 2, or PCI DSS, include `title`, `domain`, and `category` in each
-`control_content` record. Complai creates the controls and builds the index.
-
 Low-confidence records are rejected by default. Use
 `--allow-low-confidence` only after human review and confirmation.
 
-### 5. Run gap analysis and generate a report
+### 6. Run gap analysis and generate a report
 
 Continue by telling the agent:
 

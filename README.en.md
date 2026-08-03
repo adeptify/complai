@@ -297,18 +297,6 @@ examples.
   agent must not invent control requirements, system facts, evidence, or
   assessment decisions.
 
-## Upgrading from 0.2.x
-
-`0.3.0` replaces format-specific entry points with one versioned JSON protocol:
-
-- Removes `complai parse`.
-- Removes `complai compliance ingest` and `complai system ingest`.
-- Removes the `facts.yaml` and `notes.md` agent input conventions.
-- Adds `complai ingest schema/validate/plan/apply`.
-
-Single-record maintenance commands such as `system add`, `fact add`, and
-`matrix set/link` remain available.
-
 ## Development
 
 ```sh

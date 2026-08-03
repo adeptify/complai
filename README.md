@@ -263,17 +263,6 @@ complai skill get doc-ingest
 - 缺失或不确定的信息必须保持 partial 或低置信度；Agent 不得臆造控制要求、
   系统事实、证据或评估结论。
 
-## 从 0.2.x 升级
-
-`0.3.0` 使用统一 JSON 协议替换原有格式专用入口：
-
-- 删除 `complai parse`。
-- 删除 `complai compliance ingest` 和 `complai system ingest`。
-- 删除 `facts.yaml` 和 `notes.md` 两种 Agent 输入约定。
-- 新增 `complai ingest schema/validate/plan/apply`。
-
-`system add`、`fact add`、`matrix set/link` 等单条人工维护命令仍然保留。
-
 ## 开发
 
 ```sh

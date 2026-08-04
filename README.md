@@ -61,25 +61,7 @@ Complai 负责稳定的数据模型、严格的写入边界、来源追踪和确
 
 ## 工作原理
 
-```mermaid
-flowchart LR
-    A[规范和既有材料<br/>Excel · PDF · Word · 图片 · 云文档]
-    B[AI Agent<br/>读取 · 分类 · 映射 · 标注来源]
-    C[版本化 ingest JSON<br/>控制 · 系统 · 项目 · 矩阵]
-    D[Complai CLI<br/>schema · validate · plan · apply]
-    E[(合规框架 KB)]
-    F[(业务系统 KB)]
-    G[评估项目<br/>矩阵 · 事实 · 证据]
-    H[差距报告]
-
-    A --> B --> C --> D
-    D --> E
-    D --> F
-    D --> G
-    E --> G
-    F --> G
-    G --> H
-```
+![Complai 合规工程闭环：从规范和既有材料，经 AI Agent、版本化 ingest JSON 与 Complai CLI，沉淀至知识库和评估项目并生成差距报告](docs/assets/complai-workflow.png)
 
 Agent 可以针对不同来源选择最合适的读取能力；Complai 只接受符合当前 JSON Schema、
 且目标系统、项目、框架和控制项均有效的结构化记录。

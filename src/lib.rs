@@ -12,6 +12,7 @@ pub mod model;
 pub mod paths;
 pub mod project;
 pub mod reports;
+mod revision;
 pub mod skill;
 mod storage;
 pub mod system;

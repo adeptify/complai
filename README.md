@@ -160,6 +160,12 @@ complai matrix show --status unassessed
 ```
 
 没有级别概念的框架省略 `--level`。矩阵中的控制项初始状态统一为 `unassessed`。
+项目初始化时会钉住 framework/system KB 的内容 revision；`project show` 会分别显示
+`current` 或 `drifted`。审阅后若要采用新的 KB 内容，运行：
+
+```sh
+complai project sync
+```
 
 ### 5. 提供已有材料
 
@@ -179,6 +185,9 @@ complai ingest plan --from tmp/complai-ingest.json
 # 检查 plan 后才执行：
 complai ingest apply --from tmp/complai-ingest.json
 ```
+
+同时更新 KB 与当前项目的 bundle 会在同一事务中推进项目 revision。纯 KB 导入不会
+自动推进项目；如果 `project show` 显示 drift，应先审阅变化，再运行 `project sync`。
 
 一个 bundle 可以同时包含四种记录：
 
@@ -229,7 +238,7 @@ complai gen report
 | 合规框架 KB | 共享控制项、要求摘要和实施指引 | `compliance scaffold/list/show/build` |
 | 业务系统 KB | 复用架构、资产、数据流和策略事实 | `system init/add/find/show` |
 | 统一 ingest | 严格、可追溯、幂等的 Agent 批量写入 | `ingest schema/validate/plan/apply` |
-| 评估项目 | 绑定一个系统、框架和可选级别 | `project init/show` |
+| 评估项目 | 绑定系统、框架、可选级别及 KB revision | `project init/show/sync` |
 | 控制矩阵 | 状态、缺口、整改、负责人、事实和证据引用 | `matrix show/set/link/trace` |
 | 项目事实 | 发现、整改、例外、决策和备注 | `fact add/find/show` |
 | 证据管理 | 复制、哈希、分类、查询并关联证据 | `evidence add/list/find/show` |
@@ -268,7 +277,7 @@ complai skill get doc-ingest
     └── <safe-domain>/SYS-F-NNNN.md
 
 <project>/
-├── project.yaml
+├── project.yaml              # system/framework + pinned revisions
 ├── matrix.yaml
 ├── facts/
 ├── evidence.yaml
@@ -282,6 +291,11 @@ complai skill get doc-ingest
 - `COMPLAI_PROJECT_DIR`：当前目录不在项目内时，显式指定项目根。
 
 字段模板与示例见 [docs/file-templates.md](docs/file-templates.md)。
+
+revision 是 `sha256:` 内容摘要，覆盖 KB 索引以及索引引用正文的相对路径和原始字节，
+不依赖 Git、时间戳或绝对路径。`matrix trace` 和 `gen report` 会拒绝使用 drifted KB，
+报告也会记录两个 revision。当前版本负责钉扎和漂移检测；旧 revision 的正文快照及
+团队拉取/发布仍是后续能力。
 
 ## 当前范围与安全边界
 
@@ -332,6 +346,7 @@ tests/                        单元、集成和快照测试
 ## 文档
 
 - [文件格式与初始化](docs/file-templates.md)
+- [系统事实粒度规范](docs/fact-granularity.md)
 - [Agent Skill 架构](skills/SKILLS.md)
 - [存储与设计计划](PLAN.md)
 - [发布流程](docs/releasing.md)

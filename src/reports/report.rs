@@ -21,6 +21,8 @@ type GroupedEntries<'a> =
 pub fn generate() -> eyre::Result<()> {
     let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai 写操作失败")?;
     let root = project_root().wrap_err("定位当前项目失败")?;
+    let revisions = crate::project::ensure_revisions_current(&root)
+        .wrap_err("报告生成要求项目 KB revision 保持一致")?;
     let matrix = crate::project::matrix::load(&root).wrap_err("加载控制矩阵失败")?;
     let framework = matrix.framework.as_str().to_string();
     let kb_index =
@@ -80,10 +82,18 @@ pub fn generate() -> eyre::Result<()> {
     let mut out = String::new();
     out.push_str("# 合规差距报告\n\n");
     out.push_str(&format!("- 框架: {}\n", matrix.framework));
+    out.push_str(&format!(
+        "- 框架 KB revision: {}\n",
+        revisions.framework_revision
+    ));
     if let Some(level) = matrix.level {
         out.push_str(&format!("- 等级: {level}\n"));
     }
     out.push_str(&format!("- 范围: {}\n", matrix.scope.systems.join(", ")));
+    out.push_str(&format!(
+        "- 系统 KB revision: {}\n",
+        revisions.system_revision
+    ));
     out.push_str(&format!(
         "- 统计: 共 {total} 项 | 未评估 {unassessed} | 满足 {met} | 部分满足 {partial} | 缺口 {gaps} | 不适用 {na}\n"
     ));

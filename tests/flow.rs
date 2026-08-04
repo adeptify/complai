@@ -144,6 +144,12 @@ fn unified_ingest_applies_all_record_types_idempotently() {
         },
     )
     .unwrap();
+    assert!(
+        project::revision_status(&project_path)
+            .expect("统一 ingest 后 revision 状态可读取")
+            .is_current(),
+        "同时写 KB 与项目的 bundle 应在事务内同步 revision"
+    );
     assert_eq!(
         first_plan
             .iter()
@@ -271,6 +277,23 @@ fn project_end_to_end_produces_gap_report() {
         std::env::set_var("COMPLAI_PROJECT_DIR", &proj_path);
     }
 
+    let framework_dir = compliance::framework_dir("dengbao-2.0").expect("框架目录可解析");
+    let control_path = framework_dir.join("技术/安全计算环境/8.1.4.1.md");
+    let control = std::fs::read_to_string(&control_path).expect("控制正文可读取");
+    std::fs::write(&control_path, format!("{control}\n<!-- reviewed -->\n"))
+        .expect("控制正文可更新");
+    assert!(
+        !project::revision_status(&proj_path)
+            .expect("框架变化后 revision 状态可读取")
+            .is_current(),
+        "框架正文变化应被检测为 drift"
+    );
+    assert!(
+        project::matrix::trace("dengbao-2.0:8.1.4.1").is_err(),
+        "未审阅框架 drift 前不应生成控制追踪包"
+    );
+    project::sync().expect("审阅后应可同步框架 revision");
+
     // 系统事实(共享 system KB)
     system::fact::add(
         "order-platform",
@@ -282,6 +305,22 @@ fn project_end_to_end_produces_gap_report() {
         Some("三个微服务,经 API 网关接入,mTLS。".into()),
     )
     .unwrap();
+    assert!(
+        !project::revision_status(&proj_path)
+            .expect("系统事实变化后 revision 状态可读取")
+            .is_current(),
+        "共享系统变化应让项目显式显示 drift"
+    );
+    assert!(
+        reports::report::generate().is_err(),
+        "未审阅 KB drift 前不应生成不可复现报告"
+    );
+    project::sync().expect("审阅后应可同步 KB revision");
+    assert!(
+        project::revision_status(&proj_path)
+            .expect("同步后的 revision 状态可读取")
+            .is_current()
+    );
     // 项目事实(整改项)
     project::fact::add(
         "整改".into(),
@@ -316,6 +355,8 @@ fn project_end_to_end_produces_gap_report() {
     assert!(report.contains("payment-service 未启用多因素"));
     assert!(report.contains("Q3 完成 MFA 接入"));
     assert!(report.contains("SYS-F-0001"));
+    assert!(report.contains("框架 KB revision: sha256:"));
+    assert!(report.contains("系统 KB revision: sha256:"));
 }
 
 #[test]
@@ -650,6 +691,7 @@ fn matrix_links_keep_reverse_indexes_consistent_and_evidence_immutable() {
         Some("统一身份服务支撑多个控制。".to_string()),
     )
     .expect("无控制系统事实可添加");
+    project::sync().expect("系统事实变更审阅后可同步 revision");
     project::fact::add(
         "整改".to_string(),
         "补充认证策略".to_string(),

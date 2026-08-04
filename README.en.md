@@ -183,7 +183,13 @@ complai matrix show --status unassessed
 ```
 
 Omit `--level` for frameworks that do not define levels. Every matrix control
-starts in the `unassessed` state.
+starts in the `unassessed` state. Initialization pins content revisions for the
+framework and system KBs; `project show` reports each as `current` or `drifted`.
+After reviewing KB changes, adopt them explicitly with:
+
+```sh
+complai project sync
+```
 
 ### 5. Provide existing material
 
@@ -204,6 +210,10 @@ complai ingest plan --from tmp/complai-ingest.json
 # Run only after reviewing the plan:
 complai ingest apply --from tmp/complai-ingest.json
 ```
+
+A bundle that updates both a KB and the current project advances the project
+revision in the same transaction. A KB-only import does not; review the change
+before running `project sync` when `project show` reports drift.
 
 One bundle can contain four record types:
 
@@ -255,7 +265,7 @@ The report is written to `drafts/compliance-report.md` inside the project.
 | Compliance framework KB | Share control definitions, requirement summaries, and implementation guidance | `compliance scaffold/list/show/build` |
 | Business system KB | Reuse architecture, asset, data-flow, and policy facts | `system init/add/find/show` |
 | Unified ingest | Strict, traceable, idempotent agent batch writes | `ingest schema/validate/plan/apply` |
-| Assessment projects | Bind one system, framework, and optional level | `project init/show` |
+| Assessment projects | Bind a system, framework, optional level, and KB revisions | `project init/show/sync` |
 | Control matrix | Track status, gaps, remediation, owners, facts, and evidence references | `matrix show/set/link/trace` |
 | Project facts | Store findings, remediation, exceptions, decisions, and notes | `fact add/find/show` |
 | Evidence management | Copy, hash, classify, query, and link evidence | `evidence add/list/find/show` |
@@ -295,7 +305,7 @@ Shared knowledge is stored in `~/.complai/kb` by default:
     └── <safe-domain>/SYS-F-NNNN.md
 
 <project>/
-├── project.yaml
+├── project.yaml              # system/framework + pinned revisions
 ├── matrix.yaml
 ├── facts/
 ├── evidence.yaml
@@ -311,6 +321,12 @@ Environment variables:
 
 See [docs/file-templates.md](docs/file-templates.md) for field templates and
 examples.
+
+A revision is a `sha256:` content digest over the KB index plus each indexed
+document's relative path and raw bytes. It is independent of Git, timestamps,
+and absolute paths. `matrix trace` and `gen report` reject drifted KBs, and
+reports record both revisions. This release pins and detects drift; immutable
+historical snapshots and team publish/pull transport remain future work.
 
 ## Current scope and safety boundaries
 
@@ -367,6 +383,7 @@ tests/                        unit, integration, and snapshot tests
 ## Documentation
 
 - [File formats and initialization](docs/file-templates.md)
+- [System fact granularity specification (Chinese)](docs/fact-granularity.md)
 - [Agent Skill architecture](skills/SKILLS.md)
 - [Storage and design plan](PLAN.md)
 - [Release process](docs/releasing.md)

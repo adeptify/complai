@@ -53,11 +53,13 @@ description: >-
    complai project show
    complai matrix show --status unassessed
    ```
+   确认 `framework_revision_status` 和 `system_revision_status` 都是 `current`。
 
 ## 后续
 
 - **若系统是新建的**：加载 `doc-ingest` workflow，从已有备案、设计或测评材料抽取
-  架构/数据流/资产等事实；少量人工事实也可用 `complai system add`。
+  架构/数据流/资产等事实；少量人工事实也可用 `complai system add`。纯 KB 写入会
+  使项目显示 drift；审阅变更后运行 `complai project sync`。
 - **差距分析**：加载 `gap-analysis` workflow。
 - **整改/证据**：使用 `fact add --kind 整改 ...` 和 `evidence add ...`。
 - **报告**：使用 `gen report`。
@@ -67,3 +69,5 @@ description: >-
 - 框架、可选级别与系统归属由用户确认，不要臆测。
 - 只通过 CLI 写入状态；`project init` 前确保 compliance KB 已有该框架索引。
 - 每个项目只绑定一个系统和一个框架。
+- 不要在 drift 状态下开展 trace 或生成报告；先让用户审阅 KB 变化，再运行
+  `project sync`。

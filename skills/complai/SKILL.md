@@ -39,8 +39,9 @@ complai --version
 
 - 共享知识库默认位于 `~/.complai/kb`。仅在用户指定其他位置时设置 `COMPLAI_KB_DIR`。
 - 进入包含 `project.yaml` 的项目目录工作；只有无法进入该目录时才为当前任务设置 `COMPLAI_PROJECT_DIR`。
-- 已进入项目时先运行 `complai project show` 确认框架和系统；新建项目时由
-  `project-init` workflow 确认这些信息。
+- 已进入项目时先运行 `complai project show` 确认框架、系统和两个 KB revision 状态；
+  drift 必须经用户审阅后用 `project sync` 推进。新建项目时由 `project-init`
+  workflow 确认这些信息。
 - 使用 `complai compliance list --framework <框架>` 检查框架库。等保 2.0 可用
   `compliance scaffold`；其他框架通过 `doc-ingest` workflow 从用户有权使用的规范材料创建。
 - 控制正文必须来自用户有权使用的材料；不能臆造标准原文。
@@ -73,7 +74,7 @@ complai skill get "${skill_name}"
 complai compliance --help  # 框架控制库
 complai ingest --help      # 统一结构化导入
 complai system --help      # 跨项目共享的系统事实
-complai project --help     # 项目初始化
+complai project --help     # 项目初始化、revision 检查与同步
 complai fact --help        # 项目专属事实
 complai matrix --help      # 控制矩阵与最小上下文追踪
 complai evidence --help    # 证据登记与查询
@@ -90,4 +91,5 @@ complai gen --help         # 报告生成
   `ingest validate` 和 `ingest plan`，确认计划后才 `ingest apply`。
 - 缺少框架正文、系统事实、证据或用户决策时明确指出，不要补造。
 - 项目名、系统 slug、框架、可选级别、状态和抽取映射按已加载 workflow 的确认规则处理。
+- trace/report 遇到 KB drift 时停止；不要直接编辑 `project.yaml` 或未经审阅自动同步。
 - 矩阵初始状态为 `unassessed`；只有经评估确认不适用时才使用 `na`。

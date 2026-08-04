@@ -254,6 +254,10 @@ pub fn link(
     if !matrix.entries.contains_key(&cid) {
         eyre::bail!("控制 {cid} 不在矩阵中");
     }
+    if fact.is_some() {
+        crate::project::ensure_revisions_current(&root)
+            .wrap_err("关联系统事实前项目 KB revision 必须保持一致")?;
+    }
 
     // 双向字段在同一事务中更新，保证 matrix trace 与各 find 命令看到同一关系。
     crate::storage::transaction(|| {
@@ -292,7 +296,12 @@ pub fn link(
             entry.project_facts.push(pf.clone());
         }
         entry.last_updated = Some(Local::now().date_naive());
-        save(&root, &matrix).wrap_err("保存控制矩阵失败")
+        save(&root, &matrix).wrap_err("保存控制矩阵失败")?;
+        if fact.is_some() {
+            crate::project::refresh_revisions(&root)
+                .wrap_err("同步系统事实关联后的项目 KB revision 失败")?;
+        }
+        Ok(())
     })
     .wrap_err("关联矩阵事务失败")?;
     println!("linked to {cid}: evidence={evidence:?} fact={fact:?} project_fact={project_fact:?}");
@@ -301,10 +310,13 @@ pub fn link(
 
 /// 聚合控制正文(compliance KB)+ 系统事实(共享 system KB)+ 项目事实 + 证据 + 矩阵状态。
 pub fn trace(control_str: &str) -> eyre::Result<()> {
+    let _lock = crate::storage::WriteLock::acquire().wrap_err("锁定 Complai KB 读取失败")?;
     let cid: ControlId = control_str
         .parse()
         .wrap_err_with(|| format!("`{control_str}` 不是合法控制 ID"))?;
     let root = project_root().wrap_err("定位当前项目失败")?;
+    crate::project::ensure_revisions_current(&root)
+        .wrap_err("控制追踪要求项目 KB revision 保持一致")?;
     let matrix = load(&root).wrap_err("加载控制矩阵失败")?;
     let entry = matrix
         .entries

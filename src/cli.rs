@@ -163,8 +163,10 @@ pub enum ProjectCommand {
         #[arg(long)]
         level: Option<u8>,
     },
-    /// 显示当前项目绑定的系统、框架和可选级别
+    /// 显示当前项目绑定的系统、框架、级别和 KB revision 状态
     Show,
+    /// 审阅 KB 变更后，把当前 framework/system revision 写入项目
+    Sync,
 }
 
 #[derive(Subcommand, Debug)]

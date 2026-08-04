@@ -17,6 +17,8 @@ description: >-
 ## 前置条件
 
 - 进入已初始化的项目，运行 `complai project show` 获取当前框架，不要硬编码框架名。
+  `framework_revision_status` 或 `system_revision_status` 为 `drifted` 时暂停；让用户审阅
+  KB 变更，确认后运行 `complai project sync`，不要绕过 revision 检查。
 - 运行 `complai compliance list --framework <框架>` 确认控制清单已就绪。若控制正文为
   `empty` 或仍有待摘录占位内容，停止评估该项并提示用户导入权威材料，不要臆测要求。
 

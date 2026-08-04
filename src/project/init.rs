@@ -101,6 +101,9 @@ pub fn init(name: &str, system: &str, framework: &str, level: Option<u8>) -> eyr
             "系统 `{system}` 不存在；先运行 `complai system init {system} --name <显示名>`"
         );
     }
+    let framework_revision =
+        crate::revision::framework(framework).wrap_err("计算框架 KB revision 失败")?;
+    let system_revision = crate::revision::system(system).wrap_err("计算系统 KB revision 失败")?;
 
     let scope = Scope {
         systems: vec![system.to_string()],
@@ -116,7 +119,9 @@ pub fn init(name: &str, system: &str, framework: &str, level: Option<u8>) -> eyr
     let meta = ProjectMeta {
         name: project_name.to_string(),
         system: system.to_string(),
+        system_revision,
         framework: framework.to_string(),
+        framework_revision,
         level,
     };
     let meta_yaml = serde_yml::to_string(&meta).wrap_err("序列化 project.yaml 失败")?;

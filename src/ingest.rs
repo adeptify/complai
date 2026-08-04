@@ -389,8 +389,36 @@ pub fn apply_bundle(bundle: &IngestBundle, options: ApplyOptions) -> eyre::Resul
         }
     }
 
+    let targets_current_project = bundle.records.iter().any(|record| {
+        matches!(
+            record,
+            IngestRecord::ProjectFact { .. } | IngestRecord::MatrixAssessment { .. }
+        )
+    });
+    if targets_current_project {
+        let root = crate::project::project_root().wrap_err("定位 ingest 当前项目失败")?;
+        let project = crate::project::load_meta(&root).wrap_err("加载 ingest 当前项目失败")?;
+        let changes_referenced_kb = bundle.records.iter().zip(&plan).any(|(record, item)| {
+            if item.action == PlanAction::Unchanged {
+                return false;
+            }
+            match record {
+                IngestRecord::ControlContent { target, .. } => {
+                    target.control.framework.as_str() == project.framework
+                }
+                IngestRecord::SystemFact { target, .. } => target.system == project.system,
+                IngestRecord::ProjectFact { .. } | IngestRecord::MatrixAssessment { .. } => false,
+            }
+        });
+        if changes_referenced_kb {
+            crate::project::ensure_revisions_current(&root)
+                .wrap_err("写入项目关联 KB 前 revision 必须保持一致")?;
+        }
+    }
+
     crate::storage::transaction(|| {
         let mut changed_frameworks = BTreeSet::new();
+        let mut changed_systems = BTreeSet::new();
         for (record, item) in bundle.records.iter().zip(&plan) {
             if item.action == PlanAction::Unchanged {
                 continue;
@@ -406,8 +434,11 @@ pub fn apply_bundle(bundle: &IngestBundle, options: ApplyOptions) -> eyre::Resul
                 }
                 IngestRecord::SystemFact {
                     target, content, ..
-                } => apply_system_fact(&target.system, content, metadata)
-                    .wrap_err_with(|| format!("写入系统 '{}' 事实失败", target.system))?,
+                } => {
+                    apply_system_fact(&target.system, content, metadata)
+                        .wrap_err_with(|| format!("写入系统 '{}' 事实失败", target.system))?;
+                    changed_systems.insert(target.system.clone());
+                }
                 IngestRecord::ProjectFact {
                     target, content, ..
                 } => apply_project_fact(&target.project, content, metadata)
@@ -419,9 +450,23 @@ pub fn apply_bundle(bundle: &IngestBundle, options: ApplyOptions) -> eyre::Resul
             }
         }
 
-        for framework in changed_frameworks {
-            crate::compliance::build::build_unlocked(&framework)
+        for framework in &changed_frameworks {
+            crate::compliance::build::build_unlocked(framework)
                 .wrap_err_with(|| format!("重建框架 '{framework}' 索引失败"))?;
+        }
+
+        // 一个同时写 KB 与当前项目的 bundle 是同一评估变更单元。KB 索引完成后
+        // 在同一事务中推进项目 revision，避免成功 apply 后项目立即显示 drift。
+        // 纯 KB bundle 不自动推进任何项目，仍要求用户显式审阅后 `project sync`。
+        if targets_current_project {
+            let root = crate::project::project_root().wrap_err("定位 ingest 当前项目失败")?;
+            let project = crate::project::load_meta(&root).wrap_err("加载 ingest 当前项目失败")?;
+            if changed_systems.contains(&project.system)
+                || changed_frameworks.contains(&project.framework)
+            {
+                crate::project::refresh_revisions(&root)
+                    .wrap_err("同步 ingest 项目 KB revision 失败")?;
+            }
         }
         Ok(())
     })

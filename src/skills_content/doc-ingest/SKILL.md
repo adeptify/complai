@@ -29,6 +29,10 @@ complai ingest schema
    - `system_fact`：可跨项目复用的架构、资产、数据流、部署、人员或策略事实。
    - `project_fact`：本次备案的发现、整改、例外、决策或备注。
    - `matrix_assessment`：针对一个控制项的 `unassessed/met/partial/gap/na` 状态。
+   对 `system_fact` 使用统一粒度：一条事实只表达“一个明确对象在一个明确范围内，
+   由一个明确来源支撑，并按同一生命周期变化的可独立验证主张”。对象、环境、
+   系统边界、机制、来源、确认时间、置信度或更新周期任一不同，就拆成不同事实；
+   不要按框架或控制项复制同一事实。
 3. 按 `complai ingest schema` 输出 `tmp/complai-ingest.json`。为每条记录生成稳定
    `external_key`，组合来源身份、定位和记录语义；不要使用会随正文改写而变化的
    随机值。
@@ -52,7 +56,26 @@ complai ingest schema
 
 7. **抽查**：写入后用
    `compliance show`、`system find/show`、`fact find/show` 或 `matrix show/trace`
-   抽查结果。
+   抽查结果。已进入项目时先运行 `complai project show`：同时写入 KB 与当前项目的
+   bundle 会在事务内推进 revision；纯 KB bundle 会保留 drift，审阅变更后运行
+   `complai project sync`。
+
+## `system_fact` 输出检查清单
+
+生成 bundle 前逐条检查；任一项不满足时先重新拆分，不要进入 apply：
+
+- [ ] 只包含一个可独立判真的主张；任一子句能独立变化时已经拆开。
+- [ ] 对象、系统边界、适用环境和覆盖群体明确。
+- [ ] 全部内容共享同一来源定位、确认时间和置信度。
+- [ ] 标题是客观主张，不是“安全情况”等主题，也不是“符合某控制”等结论。
+- [ ] 正文写明必要机制和影响真实性的例外；独立例外另拆事实。
+- [ ] `external_key` 对“来源定位 + 原子主张”稳定且唯一。
+- [ ] 同一事实可以关联多个框架控制，但没有因框架不同复制正文。
+- [ ] 不确定内容已限定范围、降低置信度或不输出。
+
+以下内容必须拆分：MFA、堡垒机审计、日志告警、备份和恢复测试，因为它们可以
+独立变化并由不同证据证明。认证流程中同一配置下共同变化的“密码 + 硬件令牌”
+可以保留为一条事实。
 
 ## 判断边界
 
@@ -68,3 +91,4 @@ complai ingest schema
   并明确确认后才使用 `--allow-low-confidence`。
 - 控制正文使用自己的话概述，不复录用户无权再分发的标准原文。
 - 只通过统一 ingest CLI 写入批量抽取结果，不直接编辑 KB、索引或矩阵文件。
+- 不要为了消除 drift 自动运行 `project sync`；纯 KB 变更应先由用户审阅。

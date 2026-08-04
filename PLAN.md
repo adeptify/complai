@@ -25,7 +25,7 @@ $COMPLAI_KB_DIR/                         # 默认 ~/.complai/kb
     └── <safe-domain>/SYS-F-NNNN.md
 
 <project>/
-├── project.yaml                         # system + framework + optional level
+├── project.yaml                         # system/framework + pinned revisions + optional level
 ├── matrix.yaml                          # 状态与事实/证据引用
 ├── facts/index.yaml
 ├── facts/<kind>/PROJ-F-NNNN.md
@@ -47,12 +47,14 @@ ISO、NIST、SOC 2、PCI DSS 等其他框架通过统一 ingest 协议创建控�
 - 等保结构表显式保存控制 ID，重排 YAML 不改变控制身份。
 - 矩阵、证据和事实的控制关联在同一事务中同步。
 - 项目矩阵初始状态为 `unassessed`；`partial`、`gap` 和 `na` 必须提供理由。
+- framework/system revision 由索引及被索引正文的路径和字节计算，不依赖 Git 或时间戳。
+- 项目钉住两个 KB revision；发生漂移时 trace/report 拒绝继续，审阅后显式同步。
 
 ## 主要命令面
 
 - `compliance scaffold/build/list/show`：管理共享框架控制库。
 - `system init/add/find/show`：管理跨项目复用的系统事实。
-- `project init/show`：绑定已存在的系统与非空框架。
+- `project init/show/sync`：绑定 KB revision、检查漂移并在审阅后推进引用。
 - `fact add/find/show`：管理项目专属发现、整改、例外、决策和备注。
 - `evidence add/list/find/show`：登记不可变证据副本。
 - `matrix show/set/link/trace`：维护评估状态与可追溯关系。
@@ -61,11 +63,11 @@ ISO、NIST、SOC 2、PCI DSS 等其他框架通过统一 ingest 协议创建控�
 
 ## 后续 Roadmap
 
-### KB 版本与团队协作
+### KB 快照与团队协作
 
-为 framework KB 和 system KB 定义不可变版本标识，并在 `project.yaml` 中钉住所用
-版本，使历史矩阵与报告可以复现。团队共享方案需要同时设计发布、拉取、冲突处理和
-控制 ID 退役规则。
+当前内容 revision 可以钉住和检测漂移，但本地可变目录尚不保存旧 revision 的正文，
+因此还不能单独恢复历史快照。后续需要增加不可变快照存储，并设计发布、拉取、权限、
+冲突处理和控制 ID 退役规则；传输层可再选择 Git、对象存储或内部服务。
 
 ### 更强的崩溃恢复
 

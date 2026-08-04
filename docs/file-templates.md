@@ -27,7 +27,7 @@
 
 ```
 order-platform-dengbao3/            # 项目根
-├── project.yaml                    # 引用:system(slug)+ framework + level
+├── project.yaml                    # system/framework + pinned revisions + level
 ├── matrix.yaml                     # 控制矩阵(init 预填全部控制为 unassessed)
 ├── facts/                          # 项目专属事实(整改/例外/决策/发现/备注)
 │   ├── index.yaml
@@ -126,6 +126,9 @@ status: current
 
 `domain`:架构/组件/数据流/数据分类/资产/技术栈/部署/网络/人员/策略。`source.type`:doc/interview/scan/user。`status`:current/stale/superseded(演进用 `supersedes` 留版本链)。
 
+Agent 输出 `system_fact` 时按[系统事实粒度规范](fact-granularity.md)拆分：以可独立
+验证和独立变化的主张为边界，不按框架或控制项复制事实。
+
 ### 2.4 系统 `index.yaml`(含 display_name)
 
 ```yaml
@@ -144,13 +147,19 @@ facts:
 ```yaml
 name: order-platform-dengbao3
 system: order-platform        # 引用共享 system KB(slug)
+system_revision: sha256:<64位摘要>
 framework: dengbao-2.0        # 引用共享 compliance KB
+framework_revision: sha256:<64位摘要>
 level: 3
 ```
 
+revision 由索引及其引用正文的相对路径和原始字节计算。`project show` 检查漂移；
+审阅 KB 变更后用 `project sync` 推进项目引用。当前 revision 用于钉扎和检测，
+旧正文快照仍需由后续团队共享层保存。
+
 ### 2.6 `matrix.yaml`(控制矩阵)
 
-`project init` 预填全部控制为 `na`。三类引用:`facts`=SYS-F(系统,共享)、`project_facts`=PROJ-F(项目)、`evidence`=EV(项目)。
+`project init` 预填全部控制为 `unassessed`。三类引用:`facts`=SYS-F(系统,共享)、`project_facts`=PROJ-F(项目)、`evidence`=EV(项目)。
 
 ```yaml
 framework: dengbao-2.0
